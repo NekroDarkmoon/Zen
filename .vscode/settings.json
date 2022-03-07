@@ -9,7 +9,9 @@
   
   "python.linting.pylintArgs": [
     "--indent-string=\"  \"",
-    "--ignore C0114 C0115 C0116"
+    "--ignore C0114",
+    "--ignore C0115",
+    "--ignore C0116"
   ],
   "cSpell.words": [
     "asyncpg",
