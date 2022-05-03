@@ -106,12 +106,9 @@ async def run_bot():
     # if pool is None:
     #     raise RuntimeError('Unable to connect to db.')
 
-    session = aiohttp.ClientSession()
-
     bot = Zen()
     bot.pool = pool
     bot.configs = configs
-    bot.session = session
     await bot.start()
 
 

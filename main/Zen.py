@@ -115,3 +115,8 @@ class Zen(commands.Bot):
             await super().start(self.configs['token'], reconnect=True)
         except Exception as e:
             print(e)
+
+    async def setup_hook(self) -> None:
+        self.session = aiohttp.ClientSession()
+        # TODO: Fix this
+        self.prefixes: list[str] = ['~']
