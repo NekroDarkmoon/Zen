@@ -8,6 +8,7 @@ import asyncpg
 import datetime
 import json
 import logging
+import os
 import sys
 import traceback
 
@@ -23,7 +24,7 @@ from discord import app_commands
 from discord.ext import commands
 
 # Local application imports
-
+from cogs.utils.config import Config
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
@@ -80,7 +81,7 @@ class Zen(commands.Bot):
     gateway_handler: Any
     bot_app_info: discord.AppInfo
 
-    def __init__(self):
+    def __init__(self) -> None:
         allowed_mentions = discord.AllowedMentions(
             roles=False, everyone=False, users=True)
         intents = discord.Intents.all()
@@ -118,5 +119,58 @@ class Zen(commands.Bot):
 
     async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
-        # TODO: Fix this
-        self.prefixes: list[str] = ['~']
+        self.prefixes: Config[list[str]] = Config(
+            'main/settings/prefixes.json', loop=self.loop)
+        self.blacklist: Config[bool] = Config(
+            'main/settings/blacklist.json', loop=self.loop)
+
+        self.bot_app_info = await self.application_info()
+        self.owner_id = self.bot_app_info.owner.id
+
+        # Load Extensions
+        for cog in [file.split('.')[0] for file in os.listdir('main/cogs') if file.endswith('.py')]:
+            try:
+                if cog != '__init__':
+                    self.load_extension(f'main.cogs.{cog}')
+                    print(f'Loaded cog {cog}')
+            except Exception as e:
+                print(f'Failed to load cog {cog}.', file=sys.stderr)
+                traceback.print_exc()
+
+    @property
+    def owner(self) -> discord.User:
+        return self.bot_app_info.owner
+
+    def _clear_gateway_data(self) -> None:
+        one_week_ago = discord.utils.utcnow() - datetime.timedelta(days=7)
+        for shard_id, dates in self.identifies.items():
+            to_remove = [index for index, dt in enumerate(
+                dates) if dt < one_week_ago]
+            for index in reversed(to_remove):
+                del dates[index]
+
+        for shard_id, dates in self.resumes.items():
+            to_remove = [index for index, dt in enumerate(
+                dates) if dt < one_week_ago]
+            for index in reversed(to_remove):
+                del dates[index]
+
+    async def before_identify_hook(self, shard_id: int, *, initial: bool):
+        self._clear_gateway_data()
+        self.identifies[shard_id].append(discord.utils.utcnow())
+        await super().before_identify_hook(shard_id, initial=initial)
+
+    async def on_command_error(self, ctx: Context, error: commands.CommandError) -> None:
+        if isinstance(error, commands.NoPrivateMessage):
+            await ctx.author.send('This command cannot be used in private messages.')
+        elif isinstance(error, commands.DisabledCommand):
+            await ctx.author.send('Sorry. This command is disabled and cannot be used.')
+        elif isinstance(error, commands.CommandInvokeError):
+            original = error.original
+            if not isinstance(original, discord.HTTPException):
+                print(f'In {ctx.command.qualified_name}:', file=sys.stderr)
+                traceback.print_tb(original.__traceback__)
+                print(f'{original.__class__.__name__}: {original}',
+                      file=sys.stderr)
+        elif isinstance(error, commands.ArgumentParsingError):
+            await ctx.send(str(error))
