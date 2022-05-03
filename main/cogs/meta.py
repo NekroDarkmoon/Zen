@@ -1,6 +1,9 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+from __future__ import annotations
+
 # Standard library imports
 import aiohttp
 import datetime
@@ -36,7 +39,7 @@ GuildChannel = discord.TextChannel | discord.VoiceChannel | discord.StageChannel
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class Meta(commands.Cog):
     def __init__(self, bot: Zen) -> None:
-        self.bot = bot
+        self.bot: Zen = bot
 
     @commands.command()
     async def ping(self, ctx: Context) -> None:

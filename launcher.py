@@ -90,10 +90,6 @@ async def run_bot():
     """ Starts the process of running the bot"""
     log = logging.getLogger()
 
-    # Get Config
-    with open('main/settings/config.json') as conf:
-        configs = json.load(conf)
-
     # Create DB Connection
     try:
         pool = None
@@ -108,7 +104,6 @@ async def run_bot():
 
     bot = Zen()
     bot.pool = pool
-    bot.configs = configs
     await bot.start()
 
 

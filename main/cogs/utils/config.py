@@ -30,7 +30,7 @@ class Config(Generic[_T]):
         self.encoder = encoder
         self.loop = loop
         self.lock = asyncio.Lock()
-        self._db = Dict[str, Union[_T, Any]] = {}
+        self._db: Dict[str, Union[_T, Any]] = {}
 
         if load_later:
             self.loop.create_task(self.load())

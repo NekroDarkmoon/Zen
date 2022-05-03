@@ -1,6 +1,9 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+from __future__ import annotations
+
 # Standard library imports
 import aiohttp
 import datetime
@@ -10,7 +13,7 @@ import sys
 import traceback
 
 from collections import defaultdict, Counter
-from typing import Any, AsyncIterator, Iterable, Optional, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, Iterable, Optional, Union
 
 # Third party imports
 import discord
@@ -18,6 +21,7 @@ from discord import app_commands
 from discord.ext import commands
 
 # Local application imports
+import main.settings.config as config
 from main.cogs.utils.config import Config
 from main.cogs.utils.context import Context
 
@@ -93,11 +97,11 @@ class Zen(commands.AutoShardedBot):
             tree_cls=ZenCommandTree,
         )
 
-        self.client_id: str = self.config['client_id']
+        self.client_id: str = config.client_id
         self.resumes: defaultdict[int,
                                   list[datetime.datetime]] = defaultdict(list)
-        self.indentifies: defaultdict[int,
-                                      list[datetime.datetime]] = defaultdict(list)
+        self.identifies: defaultdict[int,
+                                     list[datetime.datetime]] = defaultdict(list)
 
         self.spam_control = commands.CooldownMapping.from_cooldown(
             10, 12.0, commands.BucketType.user)
@@ -105,12 +109,6 @@ class Zen(commands.AutoShardedBot):
         self._auto_spam_count = Counter()
         self.command_stats = Counter()
         self.socket_stats = Counter()
-
-    async def start(self) -> None:
-        try:
-            await super().start(self.configs['token'], reconnect=True)
-        except Exception as e:
-            print(e)
 
     async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
@@ -127,7 +125,8 @@ class Zen(commands.AutoShardedBot):
             try:
                 if cog != '__init__':
                     await self.load_extension(f'main.cogs.{cog}')
-                    print(f'Loaded cog {cog}')
+                    print(f'Loaded Cog - {cog}')
+
             except Exception as e:
                 print(f'Failed to load cog {cog}.', file=sys.stderr)
                 traceback.print_exc()
@@ -387,6 +386,12 @@ class Zen(commands.AutoShardedBot):
         await super().close()
         await self.session.close()
 
+    async def start(self) -> None:
+        try:
+            await super().start(config.token, reconnect=True)
+        except Exception as e:
+            print(e)
+
     @property
     def config(self):
-        return __import__('main/settings/config')
+        return __import__('main.settings.config')
