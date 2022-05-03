@@ -2,30 +2,24 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Standard library imports
-import chunk
 import aiohttp
-import asyncpg
 import datetime
-import json
 import logging
 import os
 import sys
 import traceback
 
 from collections import defaultdict, Counter
-from typing import Any, AsyncIterator, Iterable, Optional
+from typing import Any, AsyncIterator, Iterable, Optional, Union
 
 # Third party imports
 import discord
-from discord import gateway
-from discord import user
-from discord import guild  # noqa
 from discord import app_commands
 from discord.ext import commands
 
 # Local application imports
-from cogs.utils.config import Config
-from cogs.utils.context import Context
+from main.cogs.utils.config import Config
+from main.cogs.utils.context import Context
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
@@ -132,7 +126,7 @@ class Zen(commands.AutoShardedBot):
         for cog in [file.split('.')[0] for file in os.listdir('main/cogs') if file.endswith('.py')]:
             try:
                 if cog != '__init__':
-                    self.load_extension(f'main.cogs.{cog}')
+                    await self.load_extension(f'main.cogs.{cog}')
                     print(f'Loaded cog {cog}')
             except Exception as e:
                 print(f'Failed to load cog {cog}.', file=sys.stderr)
@@ -297,3 +291,102 @@ class Zen(commands.AutoShardedBot):
                 members = await guild.query_members(limit=100, user_ids=to_resolve, cache=True)
                 for member in members:
                     yield member
+
+    async def on_ready(self) -> None:
+        if not hasattr(self, 'uptime'):
+            self.uptime = discord.utils.utcnow()
+
+        print(f'Ready: {self.user} (ID: {self.user.id})')
+        print(f'In {len(self.guilds)} guilds.')
+
+    async def on_shard_resumed(self, shard_id) -> None:
+        print(f'Shard ID {shard_id} has resumed...')
+        self.resumes[shard_id].append(discord.utils.utcnow())
+
+    async def on_shard_resumed(self, shard_id) -> None:
+        print(f'Shard ID {shard_id} has resumed...')
+        self.resumes[shard_id].append(discord.utils.utcnow())
+
+    @discord.utils.cached_property
+    def stats_webhook(self) -> None:
+        wh_id, wh_token = self.config.stat_webhook
+        hook = discord.Webhook.partial(
+            id=wh_id, token=wh_token, session=self.session)
+        return hook
+
+    async def log_spammer(
+        self, ctx: Context, message: discord.Message, retry_after: float, *, autoblock: bool = False
+    ) -> Optional[discord.Webhook]:
+        guild_name = getattr(ctx.guild, 'name', "No Guild (DM's)")
+        guild_id = getattr(ctx.guild, 'id', None)
+
+        fmt = 'User %s (ID %s) in guild %r (ID %s) spamming, retry_after: %.2fs'
+        log.warning(fmt, message.author, message.author.id,
+                    guild_name, guild_id, retry_after)
+        if not autoblock:
+            return
+
+        wh = self.stats_webhook
+        embed = discord.Embed(title='Auto-blocked Member', colour=0xDDA453)
+        embed.add_field(
+            name='Member', value=f'{message.author} (ID: {message.author.id})', inline=False)
+        embed.add_field(name='Guild Info',
+                        value=f'{guild_name} (ID: {guild_id})', inline=False)
+        embed.add_field(
+            name='Channel Info', value=f'{message.channel} (ID: {message.channel.id}', inline=False)
+        embed.timestamp = discord.utils.utcnow()
+        return await wh.send(embed=embed)
+
+    async def get_context(self, origin: Union[discord.Interaction, discord.Message], /, *, cls=Context) -> Context:
+        return await super().get_context(origin, cls=cls)
+
+    async def on_message(self, message: discord.Message) -> None:
+        if message.author.bot:
+            return
+        await self.process_commands(message)
+
+    async def process_commands(self, message: discord.Message) -> None:
+        ctx = await self.get_context(message)
+
+        if ctx.command is None:
+            return
+
+        if ctx.author.id in self.blacklist:
+            return
+
+        if ctx.guild is not None and ctx.guild.id in self.blacklist:
+            return
+
+        bucket = self.spam_control.get_bucket(message)
+        current = message.created_at.timestamp()
+        retry_after = bucket.update_rate_limit(current)
+        author_id = message.author.id
+
+        if retry_after and author_id != self.owner_id:
+            self._auto_spam_count[author_id] += 1
+            if self._auto_spam_count[author_id] >= 10:
+                await self.add_to_blacklist(author_id)
+                del self._auto_spam_count[author_id]
+                await self.log_spammer(ctx, message, retry_after, autoblock=True)
+            else:
+                await self.log_spammer(ctx, message, retry_after)
+            return
+        else:
+            self._auto_spam_count.pop(author_id, None)
+
+        try:
+            await self.invoke(ctx)
+        finally:
+            await ctx.release()
+
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        if guild.id in self.blacklist:
+            await guild.leave()
+
+    async def close(self) -> None:
+        await super().close()
+        await self.session.close()
+
+    @property
+    def config(self):
+        return __import__('main/settings/config')
