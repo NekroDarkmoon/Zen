@@ -3,7 +3,7 @@
   "editor.formatOnSave": true,
 
   "python.formatting.provider": "autopep8",
-  "python.formatting.autopep8Args": ["--indent-size=2", "--ignore E121"],
+  "python.formatting.autopep8Args": ["--indent-size=4"],
   "python.linting.pylintEnabled": true,
   "python.linting.lintOnSave": true,
   
@@ -16,5 +16,6 @@
   "cSpell.words": [
     "asyncpg",
     "uvloop"
-  ]
+  ],
+  "python.linting.enabled": true
 }
