@@ -2,6 +2,8 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+from __future__ import annotations
+
 # Standard library imports
 import asyncio
 from email import message
