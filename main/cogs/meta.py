@@ -163,7 +163,7 @@ class FrontPageSource(menus.PageSource):
         if self.index == 0:
             embed.add_field(
                 name='Who are you?',
-                value=("Someone"),
+                value=('Someone'),
                 inline=False,
             )
         elif self.index == 1:
@@ -269,6 +269,41 @@ class PaginatedHelpCommand(commands.HelpCommand):
         await self.context.release()
         await menu.start()
 
+    async def send_cog_help(self, cog):
+        entries = await self.filter_commands(cog.get_commands(), sort=True)
+        menu = HelpMenu(GroupHelpPageSource(
+            cog, entries, prefix=self.context.clean_prefix), ctx=self.context)
+        await self.context.release()
+        await menu.start()
+
+    def common_command_formatting(self, embed_like, command):
+        embed_like.title = self.get_command_signature(command)
+        if command.description:
+            embed_like.description = f'{command.description}\n\n{command.help}'
+        else:
+            embed_like.description = command.help or 'No help found...'
+
+    async def send_command_help(self, command):
+        # No pagination necessary for a single command.
+        embed = discord.Embed(colour=discord.Colour(0xA8B9CD))
+        self.common_command_formatting(embed, command)
+        await self.context.send(embed=embed)
+
+    async def send_group_help(self, group):
+        subcommands = group.commands
+        if len(subcommands) == 0:
+            return await self.send_command_help(group)
+
+        entries = await self.filter_commands(subcommands, sort=True)
+        if len(entries) == 0:
+            return await self.send_command_help(group)
+
+        source = GroupHelpPageSource(
+            group, entries, prefix=self.context.clean_prefix)
+        self.common_command_formatting(source, group)
+        menu = HelpMenu(source, ctx=self.context)
+        await self.context.release()
+        await menu.start()
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                        Meta Cog
