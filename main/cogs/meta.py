@@ -299,11 +299,10 @@ class PaginatedHelpCommand(commands.HelpCommand):
         await self.context.release()
         await menu.start()
 
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                        Meta Cog
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 class Meta(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
@@ -339,7 +338,7 @@ class Meta(commands.Cog):
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Import
+#                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 

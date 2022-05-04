@@ -99,6 +99,7 @@ class Zen(commands.AutoShardedBot):
         )
 
         self.client_id: str = config.client_id
+        self.dev_guilds: set(config.guilds)
         self.resumes: defaultdict[int,
                                   list[datetime.datetime]] = defaultdict(list)
         self.identifies: defaultdict[int,
