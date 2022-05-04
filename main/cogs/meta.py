@@ -154,12 +154,6 @@ class FrontPageSource(menus.PageSource):
         """
         )
 
-        embed.add_field(
-            name='Support Server',
-            value='For more help, consider joining the official server over at https://discord.gg/DWEaqMy',
-            inline=False,
-        )
-
         if self.index == 0:
             embed.add_field(
                 name='Who are you?',
