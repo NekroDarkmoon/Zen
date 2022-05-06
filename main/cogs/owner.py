@@ -7,7 +7,7 @@ from __future__ import annotations
 
 # Standard library imports
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Mapping
 
 # Third party imports
 import discord
