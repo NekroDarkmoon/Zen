@@ -75,9 +75,13 @@ class DB:
                 await old_init(conn)
 
         cls._pool = pool = await asyncpg.create_pool(uri, **kwargs)
+        log.info('Connected to db and acquired pool.')
 
         # Do db stuff
-        await cls.create_schemas(pool)
+        try:
+            await cls.create_schemas(pool)
+        except Exception as e:
+            print(e)
 
         return pool
 
@@ -86,7 +90,6 @@ class DB:
         return MaybeAcquire(conn, pool=cls._pool)
 
     # Create Schemas
-
     @classmethod
     async def create_schemas(cls, conn):
         sql_queries: dict = schema.tables

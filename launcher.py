@@ -94,8 +94,7 @@ async def run_bot():
 
     # Create DB Connection
     try:
-        pool = DB()
-        await pool.create_pool(config.uri)
+        pool = await DB.create_pool(config.uri)
     except Exception as e:
         print(e)
         click.echo("Unable to setup/start Postgres. Exiting. ", file=sys.stderr)
