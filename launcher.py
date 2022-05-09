@@ -14,7 +14,9 @@ import sys
 
 from logging.handlers import RotatingFileHandler
 
+import main.settings.config as config
 from main.Zen import Zen
+from main.cogs.utils.db import DB
 
 # Try Import
 try:
@@ -92,15 +94,16 @@ async def run_bot():
 
     # Create DB Connection
     try:
-        pool = None
-        pass
-    except Exception:
+        pool = DB()
+        await pool.create_pool(config.uri)
+    except Exception as e:
+        print(e)
         click.echo("Unable to setup/start Postgres. Exiting. ", file=sys.stderr)
         log.exception('Unable to setup/start Postgres. Exiting.')
         return
 
-    # if pool is None:
-    #     raise RuntimeError('Unable to connect to db.')
+    if pool is None:
+        raise RuntimeError('Unable to connect to db.')
 
     bot = Zen()
     bot.pool = pool
