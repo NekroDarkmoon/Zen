@@ -12,11 +12,10 @@ from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, Union,
 _T = TypeVar('_T')
 ObjectHook = Callable[[Dict[str, Any]], Any]
 
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Config
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 class Config(Generic[_T]):
     def __init__(self,
                  name: str,

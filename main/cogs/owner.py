@@ -7,7 +7,7 @@ from __future__ import annotations
 
 # Standard library imports
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional
 
 # Third party imports
 import discord
@@ -15,6 +15,7 @@ from discord import app_commands
 from discord.ext import commands
 
 # Local application imports
+import main.cogs.utils.formats as formats
 
 
 if TYPE_CHECKING:
@@ -79,6 +80,50 @@ class Owner(commands.Cog):
             await ctx.reply(msg)
 
         await ctx.message.add_reaction('\N{OK HAND SIGN}')
+
+    @commands.command(hidden=True)
+    @commands.guild_only()
+    async def leave(self, ctx: Context) -> None:
+        """Makes the bot leave the current guild."""
+        assert ctx.guild is not None
+        await ctx.guild.leave()
+
+    @commands.command()
+    @commands.guild_only()
+    async def sync(
+        self,
+        ctx: Context,
+        guilds: commands.Greedy[discord.Object],
+        spec: Optional[Literal['~', '*']] = None
+    ) -> None:
+
+        assert ctx.guild is not None
+
+        if not guilds:
+            if spec == '~':
+                fmt = await ctx.bot.tree.sync(guild=ctx.guild)
+            elif spec == '*':
+                ctx.bot.tree.copy_global_to(guild=ctx.guild)
+                fmt = await ctx.bot.tree.sync(guild=ctx.guild)
+            else:
+                fmt = await ctx.bot.tree.sync()
+
+            await ctx.reply(
+                f"Synced {formats.Plural(len(fmt)):command} {'globally' if spec is None else 'to the current guild.'}"
+            )
+
+            return
+
+        fmt = 0
+        for guild in guilds:
+            try:
+                await ctx.bot.tree.sync(guild=guild)
+            except discord.HTTPException:
+                pass
+            else:
+                fmt += 1
+
+        await ctx.reply(f"Synced tree to {formats.Plural(fmt):guild}.")
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

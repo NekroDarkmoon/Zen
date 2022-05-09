@@ -95,12 +95,14 @@ class DB:
         sql_queries: dict = schema.tables
         ct: str = "CREATE TABLE IF NOT EXISTS"
 
+        # Optionally create tables
         for table, query in sql_queries.items():
             sql: str = f"{ct} {table}({query})"
             await conn.execute(sql)
 
-    # Get Migrations.
+        # TODO: Optionally create indexes
 
+    # Get Migrations.
     @classmethod
     def get_migrations(cls):
         pass
