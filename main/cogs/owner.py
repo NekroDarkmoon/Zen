@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 # Standard library imports
+import logging
+
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional
 
@@ -25,9 +27,13 @@ if TYPE_CHECKING:
 GuildChannel = discord.TextChannel | discord.VoiceChannel | discord.StageChannel | discord.CategoryChannel | discord.Thread
 
 
+log = logging.getLogger(__name__)
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Owner
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 class Owner(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
