@@ -2,31 +2,26 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
-import asyncio
-import enum
-from functools import wraps
 
 # Standard library imports
+import asyncio
+import enum
+import inspect
 import logging
-import re
 import time
 
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Coroutine, MutableMapping, Protocol, TypeVar
+from functools import wraps
+from typing import Any, Awaitable, Callable, Coroutine, MutableMapping, Protocol, TypeVar
 
 # Third party imports
-import discord  # noqa
 from lru import LRU
 
 
 from discord.ext import commands
-from sqlalchemy import inspect
 
 
 # Local application imports
 
-
-if TYPE_CHECKING:
-    from main.Zen import Zen
 
 R = TypeVar('R')
 log = logging.getLogger(__name__)

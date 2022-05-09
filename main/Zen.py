@@ -15,6 +15,7 @@ import traceback
 
 from collections import defaultdict, Counter
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterable, Optional, Union
+import asyncpg
 
 # Third party imports
 import discord
@@ -75,7 +76,7 @@ class ZenCommandTree(app_commands.CommandTree):
 class Zen(commands.AutoShardedBot):
     user: discord.ClientUser
     session: aiohttp.ClientSession
-    # pool: asyncpg.Pool
+    pool: asyncpg.Pool
     command_stats: Counter[str]
     socket_stats: Counter[Any]
     gateway_handler: Any
