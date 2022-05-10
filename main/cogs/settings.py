@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from asyncpg import Pool
     from main.Zen import Zen
     from utils.context import Context
+    from main.cogs.logging import Logging
 
 
 log = logging.getLogger(__name__)
@@ -37,9 +38,14 @@ log = logging.getLogger(__name__)
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                  Create Settings Instance
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-async def create_settings_instance(pool: Pool, server_id: int) -> None:
-
-    ...
+async def create_settings_instance(pool: Pool, guild: discord.Guild) -> None:
+    try:
+        sql = '''INSERT INTO settings(server_id, owner_id)
+                                     VALUES($1, $2)
+              '''
+        await pool.execute(sql, guild.id, guild.owner_id)
+    except Exception:
+        log.error('Unable to create guild settings', exc_info=True)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -72,7 +78,7 @@ class Settings(commands.Cog):
         Set the logging channel for this server.
         """
         # Defer interaction
-        interaction.response.defer()
+        await interaction.response.defer()
 
         # Update database
         conn = self.bot.pool
@@ -81,11 +87,12 @@ class Settings(commands.Cog):
         try:
             sql = '''SELECT * FROM settings WHERE server_id=$1'''
             res = await conn.fetchrow(sql, interaction.guild_id)
+
+            if res is None:
+                await create_settings_instance(conn, interaction.guild)
+
         except Exception:
             log.error('Database query error.', exc_info=True)
-
-        if res is None:
-            create_settings_instance(conn, interaction.guild_id)
 
         # Update
         try:
@@ -97,7 +104,12 @@ class Settings(commands.Cog):
         except Exception:
             log.error('Database query error.', exc_info=True)
 
-        # TODO: Update Cache
+        # Update Cache
+        cog: Optional[Logging] = self.bot.get_cog('Logging')
+        if cog is not None:
+            cog._get_logging_channel.cache_clear()
+        else:
+            log.error(f'Cog not found - {cog}.', exc_info=True)
 
         # Send Update
         if value:
@@ -105,14 +117,14 @@ class Settings(commands.Cog):
         else:
             msg = 'Logging Channel Unset.'
 
-        interaction.response.edit_message(msg)
+        await interaction.edit_original_message(content=msg)
 
     # __________________ Enable Leveling  _____________________
     @settings_group.command(name='enablexp')
     @app_commands.describe(choice='On or Off')
     async def enable_levels(self, interaction: discord.Interaction, choice: bool) -> None:
         """Enable the leveling system for this guild."""
-        pass
+        ...
 
     # _________________ Enable Reputation  _____________________
 
