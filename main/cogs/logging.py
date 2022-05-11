@@ -153,7 +153,7 @@ class Logging(commands.Cog):
     @commands.Cog.listener(name='on_member_update')
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
         # Validate
-        if before.bot:
+        if before.bot or (before.nick == after.nick):
             return
 
         channel_id = await self._get_logging_channel(before.guild.id)
@@ -175,13 +175,68 @@ class Logging(commands.Cog):
         await log_channel.send(embed=e)
 
     # --------------------------------------------------
-    #                  Get Logging Channel
+    #                    Leave Logging
+    @commands.Cog.listener(name='on_member_remove')
+    async def on_member_remove(self, member: discord.Member) -> None:
+        # Validation
+        channel_id = await self._get_logging_channel(member.guild.id)
+        if channel_id is None:
+            return
+
+        log_channel = self.bot.get_channel(channel_id)
+
+        e = discord.Embed(
+            title=f'{member.name}#{member.discriminator}', color=discord.Color.red())
+        e.description = f':outbox_tray: {member.mention} **has left the guild.**'
+        e.set_thumbnail(url=member.avatar.url)
+        e.set_footer(text=f'ID: {member.id}')
+        e.timestamp = datetime.now()
+
+        await log_channel.send(embed=e)
 
     # --------------------------------------------------
-    #                  Get Logging Channel
+    #                     Ban Logging
+    @commands.Cog.listener(name='on_member_ban')
+    async def on_member_ban(
+        self, guild: discord.Guild, user: discord.User | discord.Member
+    ) -> None:
+        # Validation
+        channel_id = await self._get_logging_channel(guild.id)
+        if channel_id is None:
+            return
+
+        log_channel = self.bot.get_channel(channel_id)
+
+        e = discord.Embed(
+            title=f'{user.name}#{user.discriminator}', color=discord.Color.red())
+        e.description = f':outbox_tray: {user.mention} **has left the guild.**'
+        e.set_thumbnail(url=user.avatar.url)
+        e.set_footer(text=f'ID: {user.id}')
+        e.timestamp = datetime.now()
+
+        await log_channel.send(embed=e)
 
     # --------------------------------------------------
-    #                  Get Logging Channel
+    #                  Unban Logging
+    @commands.Cog.listener(name='on_member_unban')
+    async def on_member_unban(
+        self, guild: discord.Guild, user: discord.User | discord.Member
+    ) -> None:
+        # Validation
+        channel_id = await self._get_logging_channel(guild.id)
+        if channel_id is None:
+            return
+
+        log_channel = self.bot.get_channel(channel_id)
+
+        e = discord.Embed(
+            title=f'{user.name}#{user.discriminator}', color=discord.Color.red())
+        e.description = f':outbox_tray: {user.mention} **has left the guild.**'
+        e.set_thumbnail(url=user.avatar.url)
+        e.set_footer(text=f'ID: {user.id}')
+        e.timestamp = datetime.now()
+
+        await log_channel.send(embed=e)
 
     # --------------------------------------------------
     #                  Get Logging Channel

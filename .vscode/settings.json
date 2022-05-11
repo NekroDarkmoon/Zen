@@ -13,6 +13,6 @@
 		"--ignore C0115",
 		"--ignore C0116"
 	],
-	"cSpell.words": ["aiohttp", "alru", "asyncpg", "uvloop"],
+	"cSpell.words": ["aiohttp", "alru", "asyncpg", "unban", "uvloop"],
 	"python.linting.enabled": true
 }
