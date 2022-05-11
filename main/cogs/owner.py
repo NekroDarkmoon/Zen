@@ -42,7 +42,7 @@ class Owner(commands.Cog):
         return await self.bot.is_owner(ctx.author)
 
     @commands.command(hidden=True)
-    async def load_cog(self, ctx: Context, *, cog: str) -> None:
+    async def load(self, ctx: Context, *, cog: str) -> None:
         """Loads a Cog"""
         try:
             await self.bot.load_extension(cog)
@@ -52,7 +52,7 @@ class Owner(commands.Cog):
             await ctx.message.add_reaction('\N{OK HAND SIGN}')
 
     @commands.command(hidden=True)
-    async def unload_cog(self, ctx: Context, *, cog: str) -> None:
+    async def unload(self, ctx: Context, *, cog: str) -> None:
         """Unloads a Cog"""
         try:
             await self.bot.unload_extension(f'main.cogs.{cog}')
@@ -62,7 +62,7 @@ class Owner(commands.Cog):
             await ctx.message.add_reaction('\N{OK HAND SIGN}')
 
     @commands.command(hidden=True)
-    async def reload_cog(self, ctx: Context, *, cog: str) -> None:
+    async def reload(self, ctx: Context, *, cog: str) -> None:
         try:
             await self.bot.reload_extension(f'main.cogs.{cog}')
         except commands.ExtensionError as e:
@@ -71,7 +71,7 @@ class Owner(commands.Cog):
             await ctx.message.add_reaction('\N{OK HAND SIGN}')
 
     @commands.command(hidden=True)
-    async def reload_all_cogs(self, ctx: Context) -> None:
+    async def reload_all(self, ctx: Context) -> None:
         cogs: Mapping[str, ModuleType] = self.bot.extensions
         msg = ''
 

@@ -2,11 +2,13 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
+from datetime import datetime
 
 # Standard library imports
 import logging
 import re
 
+from itertools import zip_longest
 from typing import TYPE_CHECKING, Optional
 
 # Third party imports
@@ -16,7 +18,6 @@ from discord.ext import commands
 
 
 # Local application imports
-from main.cogs.utils.formats import format_dt
 
 
 if TYPE_CHECKING:
@@ -30,15 +31,8 @@ log = logging.getLogger(__name__)
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Config
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Config
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Config
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Config
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Logging
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -97,6 +91,102 @@ class Logging(commands.Cog):
             log.error('Error while logging delete message', exc_info=True)
 
     # --------------------------------------------------
+    #                    Message Edit
+    @commands.Cog.listener(name="on_message_edit")
+    async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
+        # Validation
+        if (before.author.bot) or (before.content == after.content):
+            return
+
+        channel_id = await self._get_logging_channel(before.guild.id)
+        if channel_id is None:
+            return
+
+        # Databuilder
+        author = before.author
+        guild = before.guild
+        original_channel = before.channel
+        old_content = before.content.replace('@', '@\u200b')
+        new_content = after.content.replace('@', '@\u200b')
+        pre_attachments = before.attachments
+        post_attachments = after.attachments
+        log_channel = guild.get_channel(channel_id)
+
+        if pre_attachments != []:
+            pre_attachments = [x.proxy_url for x in pre_attachments]
+        if post_attachments != []:
+            post_attachments = [x.proxy_url for x in post_attachments]
+
+        try:
+            o_content_array = [old_content[i:i+1000]
+                               for i in range(0, len(old_content), 1000)]
+            n_content_array = [new_content[i:i+1000]
+                               for i in range(0, len(new_content), 1000)]
+
+            out_content = list(zip_longest(
+                o_content_array, n_content_array, fillvalue='...'))
+
+            embeds = list()
+            auth = self._text_color(f'{author.name} - {author.id}', 'red')
+            chn = self._text_color(original_channel.name, 'red')
+
+            for idx, (old, new) in enumerate(out_content):
+                title = f"Edited Message Log {'' if idx == 0 else '- ' + str(idx) }"
+                e = discord.Embed(title=title, color=discord.Color.orange())
+
+                e.add_field(name='Author', value=auth, inline=True)
+                e.add_field(name='Channel', value=chn, inline=True)
+                e.add_field(name='Prev Content', value=f'{old}', inline=False)
+                e.add_field(name='New Content', value=f'{new}', inline=False)
+
+                e.timestamp = before.edited_at
+
+                embeds.append(e)
+
+            await log_channel.send(embeds=embeds)
+
+        except Exception:
+            log.error('Error while logging edited message', exc_info=True)
+
+    # --------------------------------------------------
+    #                  On Member Update
+    @commands.Cog.listener(name='on_member_update')
+    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+        # Validate
+        if before.bot:
+            return
+
+        channel_id = await self._get_logging_channel(before.guild.id)
+        if channel_id is None:
+            return
+
+        # Databuilder
+        old_nick = self._text_color(before.nick, 'blue')
+        new_nick = self._text_color(after.nick, 'blue')
+        log_channel = self.bot.get_channel(channel_id)
+
+        e = discord.Embed(title=f'{before.name}', colour=discord.Colour.blue())
+        e.add_field(name='UserID', value=self._text_color(
+            before.id, 'blue'), inline=False)
+        e.add_field(name='Old Nickname', value=old_nick)
+        e.add_field(name='Old Nickname', value=new_nick)
+        e.timestamp = datetime.now()
+
+        await log_channel.send(embed=e)
+
+    # --------------------------------------------------
+    #                  Get Logging Channel
+
+    # --------------------------------------------------
+    #                  Get Logging Channel
+
+    # --------------------------------------------------
+    #                  Get Logging Channel
+
+    # --------------------------------------------------
+    #                  Get Logging Channel
+
+    # --------------------------------------------------
     #                  Get Logging Channel
 
     @alru_cache(maxsize=128)
@@ -117,6 +207,23 @@ class Logging(commands.Cog):
         except Exception:
             log.error('Error while fetching log channel.', exc_info=True)
 
+    # --------------------------------------------------
+    #                  Highlight Text
+    def _text_color(self, content: str, color: str = None) -> str:
+        if color == 'red':
+            return f'```diff\n- {content}```'
+        elif color == 'orange':
+            return f'```cs\n#{content}```'
+        elif color == 'yellow':
+            return f'```fix\n {content}```'
+        elif color == 'green':
+            return f'```diff\n+ {content}```'
+        elif color == 'cyan':
+            return f'```yaml\n{content}```'
+        elif color == 'blue':
+            return f'```ini\n[{content}]```'
+        else:
+            return f'```\n{content}```'
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
