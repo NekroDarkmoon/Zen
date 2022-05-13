@@ -85,15 +85,7 @@ class Settings(commands.Cog):
         conn = self.bot.pool
 
         # Check if exists
-        try:
-            sql = '''SELECT * FROM settings WHERE server_id=$1'''
-            res = await conn.fetchrow(sql, interaction.guild_id)
-
-            if res is None:
-                await create_settings_instance(conn, interaction.guild)
-
-        except Exception:
-            log.error('Database query error.', exc_info=True)
+        await self._check_existence(interaction.guild_id)
 
         # Update
         try:
@@ -125,7 +117,32 @@ class Settings(commands.Cog):
     @app_commands.describe(choice='On or Off')
     async def enable_levels(self, interaction: discord.Interaction, choice: bool) -> None:
         """Enable the leveling system for this guild."""
-        ...
+        # Defer
+        await interaction.response.defer()
+        conn = self.bot.pool
+
+        # Check if exists
+        await self._check_existence(interaction.guild_id)
+
+        # Update
+        try:
+            sql = ''' UPDATE settings SET enable_levelling=$2
+                      WHERE server_id=$1'''
+            await conn.execute(sql, interaction.guild_id, choice)
+
+        except Exception:
+            log.error('Error while updating xp settings.', exc_info=True)
+
+        # Update Cache
+        self._get_xp_enabled.cache_clear()
+
+        # Send Update
+        if choice:
+            msg = 'XP system is now enabled'
+        else:
+            msg = 'XP system is now disabled.'
+
+        await interaction.edit_original_message(content=msg)
 
     # _________________ Enable Reputation  _____________________
 
@@ -197,6 +214,26 @@ class Settings(commands.Cog):
 
         except Exception:
             log.error('Error while checking enabled rep.', exc_info=True)
+
+    # _____________________ XP Enabled  _____________________
+    @alru_cache(maxsize=128)
+    async def _get_xp_enabled(self, server_id: int) -> Optional[bool]:
+        ...
+
+    # ________________ Check Guild Data  ___________________
+
+    async def _check_existence(self, guild_id: int) -> None:
+        # Check if exists
+        conn = self.bot.pool
+        try:
+            sql = '''SELECT * FROM settings WHERE server_id=$1'''
+            res = await conn.fetchrow(sql, guild_id)
+
+            if res is None:
+                await create_settings_instance(conn, guild_id)
+
+        except Exception:
+            log.error('Database query error.', exc_info=True)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
