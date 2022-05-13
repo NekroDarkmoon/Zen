@@ -12,6 +12,7 @@ import discord  # noqa
 
 from discord import app_commands
 from discord.ext import commands
+from async_lru import alru_cache
 
 # Local application imports
 
@@ -179,10 +180,27 @@ class Settings(commands.Cog):
         """"Remove a role as a reward."""
         ...
 
+    # ____________________ Rep Enabled  _____________________
+    @alru_cache(maxsize=128)
+    async def _get_rep_enabled(self, server_id: int) -> Optional[bool]:
+        # Get pool
+        conn = self.bot.pool
+
+        try:
+            sql = 'SELECT enable_rep FROM settings WHERE server_id=$1'
+            res = await conn.fetchrow(sql, server_id)
+
+            if res is not None:
+                return res['enable_rep']
+            else:
+                return None
+
+        except Exception:
+            log.error('Error while checking enabled rep.', exc_info=True)
+
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 async def setup(bot: Zen):
     await bot.add_cog(Settings(bot))

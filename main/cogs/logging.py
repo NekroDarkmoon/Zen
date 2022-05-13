@@ -280,10 +280,9 @@ class Logging(commands.Cog):
         else:
             return f'```\n{content}```'
 
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 async def setup(bot: Zen):
     await bot.add_cog(Logging(bot))
