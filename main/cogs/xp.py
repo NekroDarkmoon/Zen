@@ -47,6 +47,25 @@ class XP(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
 
+    # _____________________ XP Enabled  _____________________
+
+    @alru_cache(maxsize=128)
+    async def _get_xp_enabled(self, server_id: int) -> Optional[bool]:
+        # Get pool
+        conn = self.bot.pool
+
+        try:
+            sql = 'SELECT enable_leveling FROM settings WHERE server_id=$1'
+            res = await conn.fetchrow(sql, server_id)
+
+            if res is not None:
+                return res['enable_leveling']
+            else:
+                return None
+
+        except Exception:
+            log.error('Error while checking enabled xp.', exc_info=True)
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup

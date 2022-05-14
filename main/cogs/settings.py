@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from main.Zen import Zen
     from utils.context import Context
     from main.cogs.logging import Logging
+    from main.cogs.xp import XP
 
 
 log = logging.getLogger(__name__)
@@ -134,7 +135,11 @@ class Settings(commands.Cog):
             log.error('Error while updating xp settings.', exc_info=True)
 
         # Update Cache
-        self._get_xp_enabled.cache_clear()
+        cog: Optional[XP] = self.bot.get_cog('XP')
+        if cog is not None:
+            cog._get_xp_enabled.cache_clear()
+        else:
+            log.error(f'Cog not found - {cog}.', exc_info=True)
 
         # Send Update
         if choice:
@@ -214,11 +219,6 @@ class Settings(commands.Cog):
 
         except Exception:
             log.error('Error while checking enabled rep.', exc_info=True)
-
-    # _____________________ XP Enabled  _____________________
-    @alru_cache(maxsize=128)
-    async def _get_xp_enabled(self, server_id: int) -> Optional[bool]:
-        ...
 
     # ________________ Check Guild Data  ___________________
 
