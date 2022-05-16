@@ -2,9 +2,9 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
-from datetime import datetime
 
 # Standard library imports
+from datetime import datetime
 import logging
 from math import floor
 import random
@@ -72,11 +72,39 @@ class XP(commands.Cog):
         guild = message.guild
         author = message.author
         time = message.created_at
+        xp: int = 0
+        pre_level: int = 0
 
         try:
+            # Time Validation
+            sql = '''SELECT * FROM xp WHERE server_id=$1 AND user_id=$2'''
+            res = await conn.fetchrow(sql, guild.id, author.id)
+
+            if res is not None:
+                elapsed_time: datetime = res['last_xp']
+                if (time - elapsed_time).total_seconds() < 60:
+                    return
+                xp = res['xp']
+                pre_level = res['level']
+
             # TODO: Generate XP and data
+            xp += self._gen_xp(message.content)
+            level = self._calc_level(xp)
+
             # TODO: Update DB
-            pass
+            sql = '''INSERT INTO xp (server_id, user_id, xp, level, last_xp)
+                     VALUES( $1, $2, $3, $4, $5)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET xp=xp.xp + $3
+                                   level=$4
+                                   last_xp=$5
+            '''
+            await conn.execute(sql, guild.id, author.id, xp, level, time)
+
+            # Emit event for level up
+            if (level > pre_level):
+                self.bot.dispatch("xp_level_up", message, level)
+
         except Exception:
             log.error("Error when giving rep on message.", exc_info=True)
 
@@ -88,6 +116,8 @@ class XP(commands.Cog):
         interaction: discord.Interaction,
         member: Optional[discord.Member] = None
     ) -> None:
+        """ Get the xp information of a member or yourself. """
+
         # Defer
         await interaction.response.defer()
 
@@ -205,7 +235,13 @@ class XP(commands.Cog):
 
         await ctx.reply(f'{member.display_name} now has {xp} xp.')
 
-    # _____________________ XP Enabled  _____________________
+    # _____________________  XP Board  ______________________
+    @xp_group.command(name='leaderboard')
+    @app_commands.describe(page='Go to a specific page.')
+    async def leaderboard():
+        """ Display the xp leaderboard for the server. """
+        pass
+
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
     # _______________________ Gen XP  _______________________
@@ -230,6 +266,11 @@ class XP(commands.Cog):
             level += 1
 
         return level
+
+    # _____________________ Get Last Message  _____________________
+    async def _get_last_msg(self):
+        # TODO: Implementation
+        pass
 
     # _____________________ XP Enabled  _____________________
 
