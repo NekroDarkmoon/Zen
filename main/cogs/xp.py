@@ -143,6 +143,9 @@ class XP(commands.Cog):
         """
 
         # Validation
+        if not self._get_xp_enabled:
+            return
+
         if xp < 1:
             e = discord.Embed(
                 title='Error.',
@@ -167,11 +170,41 @@ class XP(commands.Cog):
             await conn.execute(sql, ctx.guild.id, member.id, new_xp, level)
 
         except Exception:
-            pass
+            log.error("Error while getting xp data.", exc_info=True)
+            return
 
-        await ctx.reply(f'{member.display_name} now has {new_xp}.')
+        await ctx.reply(f'{member.display_name} now has {new_xp} xp.')
 
-    # _____________________ XP Enabled  _____________________
+    # ______________________ Set XP  ______________________
+    @commands.command(name='setxp')
+    @commands.has_permissions(administrator=True)
+    async def setxp(self, ctx: Context, member: discord.Member, xp: int) -> None:
+        """Gives another member xp - Requires admin
+
+        Usage: `givexp "username"/@mention/id xp_amt`
+        """
+        # Validation
+        if not self._get_xp_enabled:
+            return
+
+        # Data builder
+        conn = self.bot.pool
+        level = self._calc_level(xp)
+
+        try:
+            sql = '''INSERT INTO xp(server_id, user_id, xp, level)
+                     VALUES($1, $2, $3, $4)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET xp=$3, level=$4
+            '''
+            await conn.execute(sql, ctx.guild.id, member.id, xp, level)
+
+        except Exception:
+            log.error("Error while getting xp data.", exc_info=True)
+            return
+
+        await ctx.reply(f'{member.display_name} now has {xp} xp.')
+
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
