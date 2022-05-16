@@ -108,7 +108,7 @@ class XP(commands.Cog):
                         xp.user_id=logger.user_id
                       WHERE server_id=$1 AND user_id=$2
             '''
-            res = conn.execute(sql, interaction.guild_id, member.id)
+            res = await conn.execute(sql, interaction.guild_id, member.id)
         except Exception:
             log.error("Error while getting xp data.", exc_info=True)
 
@@ -154,15 +154,29 @@ class XP(commands.Cog):
 
         try:
             sql = '''SELECT * FROM xp WHERE server_id=$1 AND user_id=$2'''
+            res = await conn.fetchrow(sql, ctx.guild.id, member.id)
+
+            new_xp = res['xp'] + xp if res['xp'] is not None else xp
+            level = self._calc_level(new_xp)
+
+            sql = '''INSERT INTO xp(server_id, user_id, xp, level)
+                     VALUES($1, $2, $3, $4)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET xp=$3, level=$4
+                '''
+            await conn.execute(sql, ctx.guild.id, member.id, new_xp, level)
 
         except Exception:
             pass
+
+        await ctx.reply(f'{member.display_name} now has {new_xp}.')
 
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
     # _______________________ Gen XP  _______________________
+
     def _gen_xp(self, msg: str) -> int:
         # TODO: Math it
 
