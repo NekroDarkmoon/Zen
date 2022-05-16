@@ -143,16 +143,18 @@ class XP(commands.Cog):
                         xp.user_id=logger.user_id
                       WHERE xp.server_id=$1 AND xp.user_id=$2
             '''
-            res = await conn.execute(sql, interaction.guild_id, member.id)
+            res = await conn.fetchrow(sql, interaction.guild_id, member.id)
         except Exception:
             log.error("Error while getting xp data.", exc_info=True)
 
+        print(res)
+
         # Build message
-        xp: int = res['xp'] if res['xp'] is not None else 0
-        level: int = res['level'] if res['level'] is not None else 0
+        xp: int = res['xp'] if res is not None else 0
+        level: int = res['level'] if res is not None else 0
         next_level_xp: int = self._calc_xp(level)
         needed_xp: int = next_level_xp - xp
-        num_msgs: int = res['msg_count'] if res['msg_count'] is not None else 0
+        num_msgs: int = res['msg_count'] if res is not None else 0
 
         msg = f'''You are level {level}, with {xp} xp.
         Level {level + 1} requires a total of {next_level_xp}: You need {needed_xp} more xp.
