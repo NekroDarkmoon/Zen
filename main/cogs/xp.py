@@ -6,6 +6,8 @@ from datetime import datetime
 
 # Standard library imports
 import logging
+from math import floor
+import random
 import re
 
 from typing import TYPE_CHECKING, Optional
@@ -129,13 +131,57 @@ class XP(commands.Cog):
 
         await interaction.edit_original_message(embed=e)
 
+    # _______________________ Give XP  ______________________
+    @commands.command(name='givexp')
+    @commands.has_permissions(administrator=True)
+    async def givexp(self, ctx: Context, member: discord.Member, xp: int) -> None:
+        """Gives another member xp - Requires admin
+
+        Usage: `givexp "username"/@mention/id xp_amt`
+        """
+
+        # Validation
+        if xp < 1:
+            e = discord.Embed(
+                title='Error.',
+                description='Unable to give none/negative xp.',
+                color=discord.Color.red())
+            await ctx.send(embed=e)
+
+        conn = self.bot.pool
+
+        try:
+            sql = '''SELECT * FROM xp WHERE server_id=$1 AND user_id=$2'''
+
+        except Exception:
+            pass
+
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
-    # _____________________ XP Enabled  _____________________
-    # _____________________ XP Enabled  _____________________
-    # _____________________ XP Enabled  _____________________
+    # _______________________ Gen XP  _______________________
+    def genXP(self, msg: str) -> int:
+        # TODO: Math it
+
+        # FIXME:
+        return random.randint(15, 25)
+
+    # _____________________ Calc XP  _______________________
+    def calcXP(self, level: int) -> int:
+        base = 400
+        inc = 200
+        return floor((base * level) + (inc * level * (level - 1) * 0.5))
+
+    # _____________________ Calc Level  _____________________
+
+    def calcLevel(self, xp: int) -> int:
+        level = 1
+        while xp >= self.calcXP(level):
+            level += 1
+
+        return level
+
     # _____________________ XP Enabled  _____________________
 
     @alru_cache(maxsize=128)
