@@ -177,32 +177,70 @@ class Settings(commands.Cog):
     @role_rewards_group.command(name='set')
     @app_commands.describe(
         system='Select the system for which the reward is awarded.',
-        target='Selected role for reward.',
+        role='Selected role for reward.',
         value='Value for when reward is awarded.')
     async def set_role_rewards(
         self,
         interaction: discord.Interaction,
         system: Literal['Rep', 'Xp'],
-        target: discord.Role,
+        role: discord.Role,
         value: int
     ) -> None:
         """Set a role as a reward."""
-        ...
+        # Defer
+        await interaction.response.defer()
+
+        # Data builder
+        conn = self.bot.pool
+        guild = interaction.guild
+
+        try:
+            sql = '''INSERT INTO rewards (server_id, role_id, type, val)
+                     VALUES ($1, $2, $3, $4)
+                     ON CONFLICT (server_id, role_id, type)
+                     DO UPDATE SET val=$4
+            '''
+            await conn.execute(sql, guild.id, role.id, system, value)
+
+            msg = f'`{role.name}` has been set as a reward for the `{system}` system.'
+            await interaction.edit_original_message(content=msg)
+
+        except Exception:
+            log.error('Error while setting role reward.', exc_info=True)
 
     # ____________________ Remove Reward  _____________________
 
     @role_rewards_group.command(name='remove')
     @app_commands.describe(
         system='Select the system for the reward.',
-        target='Selected role ro remove.')
+        role='Selected role ro remove.')
     async def remove_role_rewards(
         self,
         interaction: discord.Interaction,
         system: Literal['Rep', 'Xp'],
-        target: discord.Role
+        role: discord.Role
     ):
         """"Remove a role as a reward."""
-        ...
+        # Defer
+        await interaction.response.defer()
+
+        # Data builder
+        conn = self.bot.pool
+        guild = interaction.guild
+
+        try:
+            sql = '''DELETE FROM rewards 
+                    WHERE EXISTS
+                        (SELECT val FROM rewards 
+                        WHERE server_id=$1 AND role_id=$2 AND type=$3)
+            '''
+            await conn.execute(sql, guild.id, role.id, system)
+
+            msg = f'`{role.name}` has been removed as a reward for the `{system}` system.'
+            await interaction.edit_original_message(content=msg)
+
+        except Exception:
+            log.error('Error while setting role reward.', exc_info=True)
 
     # ____________________ Rep Enabled  _____________________
     @alru_cache(maxsize=128)
