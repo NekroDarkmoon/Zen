@@ -147,8 +147,6 @@ class XP(commands.Cog):
         except Exception:
             log.error("Error while getting xp data.", exc_info=True)
 
-        print(res)
-
         # Build message
         xp: int = res['xp'] if res is not None else 0
         level: int = res['level'] if res is not None else 0
@@ -164,7 +162,7 @@ class XP(commands.Cog):
                           color=discord.Color.random())
         e.description = msg
         e.set_thumbnail(url=member.display_avatar.url)
-        e.add_field(name='XP', value=f'{xp}/{needed_xp}', inline=True)
+        e.add_field(name='XP', value=f'{xp}/{next_level_xp}', inline=True)
         e.add_field(name='Level', value=level, inline=True)
         e.add_field(name='Messages', value=num_msgs, inline=True)
 

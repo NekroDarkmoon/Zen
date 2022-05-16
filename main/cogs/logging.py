@@ -18,6 +18,7 @@ from discord.ext import commands
 
 
 # Local application imports
+from main.cogs.utils.formats import text_color
 
 
 if TYPE_CHECKING:
@@ -41,7 +42,34 @@ class Logging(commands.Cog):
         self.bot: Zen = bot
 
     # --------------------------------------------------
+    #                  Message Create
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message) -> None:
+        # Validation
+        if message.author.bot or not message.type == discord.MessageType.default:
+            return
+
+        # Data builder
+        conn = self.bot.pool
+        guild = message.guild.id
+        member = message.author.id
+        channel = message.channel.id
+
+        try:
+            sql = '''INSERT INTO logger (server_id, user_id, channel_id, last_msg, msg_count)
+                     VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET channel_id=$3,
+                                   last_msg=$4,
+                                   msg_count=logger.msg_count + $5
+            '''
+            await conn.execute(sql, guild, member, channel, datetime.now(), 1)
+        except Exception:
+            log.error('Error while logging message.', exc_info=True)
+
+    # --------------------------------------------------
     #                  Message delete
+
     @commands.Cog.listener(name='on_message_delete')
     async def on_message_delete(self, msg: discord.Message) -> None:
         # Validation
@@ -72,9 +100,9 @@ class Logging(commands.Cog):
             e = discord.Embed(title='Deleted Message Log',
                               colour=discord.Colour.red())
             e.add_field(name='Author',
-                        value=f'```{author.name} - {author.id}```', inline=False)
+                        value=text_color(f'{author.name} - {author.id}', 'red'), inline=False)
             e.add_field(name='Channel',
-                        value=f'```{original_channel.name}```', inline=False)
+                        value=text_color(original_channel.name, 'red'), inline=False)
 
             if attachments != []:
                 e.add_field(name='Attachments', value='\n'.join(attachments))
@@ -127,8 +155,8 @@ class Logging(commands.Cog):
                 o_content_array, n_content_array, fillvalue='...'))
 
             embeds = list()
-            auth = self._text_color(f'{author.name} - {author.id}', 'red')
-            chn = self._text_color(original_channel.name, 'red')
+            auth = text_color(f'{author.name} - {author.id}', 'orange')
+            chn = text_color(original_channel.name, 'orange')
 
             for idx, (old, new) in enumerate(out_content):
                 title = f"Edited Message Log {'' if idx == 0 else '- ' + str(idx) }"
@@ -161,12 +189,12 @@ class Logging(commands.Cog):
             return
 
         # Databuilder
-        old_nick = self._text_color(before.nick, 'blue')
-        new_nick = self._text_color(after.nick, 'blue')
+        old_nick = text_color(before.nick, 'blue')
+        new_nick = text_color(after.nick, 'blue')
         log_channel = self.bot.get_channel(channel_id)
 
         e = discord.Embed(title=f'{before.name}', colour=discord.Colour.blue())
-        e.add_field(name='UserID', value=self._text_color(
+        e.add_field(name='UserID', value=text_color(
             before.id, 'blue'), inline=False)
         e.add_field(name='Old Nickname', value=old_nick)
         e.add_field(name='Old Nickname', value=new_nick)
@@ -261,24 +289,6 @@ class Logging(commands.Cog):
 
         except Exception:
             log.error('Error while fetching log channel.', exc_info=True)
-
-    # --------------------------------------------------
-    #                  Highlight Text
-    def _text_color(self, content: str, color: str = None) -> str:
-        if color == 'red':
-            return f'```diff\n- {content}```'
-        elif color == 'orange':
-            return f'```cs\n#{content}```'
-        elif color == 'yellow':
-            return f'```fix\n {content}```'
-        elif color == 'green':
-            return f'```diff\n+ {content}```'
-        elif color == 'cyan':
-            return f'```yaml\n{content}```'
-        elif color == 'blue':
-            return f'```ini\n[{content}]```'
-        else:
-            return f'```\n{content}```'
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

@@ -119,9 +119,26 @@ def format_dt(dt: datetime.datetime, style: Optional[str] = None) -> str:
         return f'<t:{int(dt.timestamp())}>'
 
     return f'<t:{int(dt.timestamp())}:{style}>'
+
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Owner
+#                       Color String
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+def text_color(content: str, color: str = None) -> str:
+    if color == 'red':
+        return f'```diff\n- {content}```'
+    elif color == 'orange':
+        return f'```cs\n#{content}```'
+    elif color == 'yellow':
+        return f'```fix\n {content}```'
+    elif color == 'green':
+        return f'```diff\n+ {content}```'
+    elif color == 'cyan':
+        return f'```yaml\n{content}```'
+    elif color == 'blue':
+        return f'```ini\n[{content}]```'
+    else:
+        return f'```\n{content}```'
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Owner
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
