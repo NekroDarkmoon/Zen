@@ -127,12 +127,13 @@ class Settings(commands.Cog):
 
         # Update
         try:
-            sql = ''' UPDATE settings SET enable_levelling=$2
+            sql = ''' UPDATE settings SET enable_leveling=$2
                       WHERE server_id=$1'''
             await conn.execute(sql, interaction.guild_id, choice)
 
         except Exception:
             log.error('Error while updating xp settings.', exc_info=True)
+            return
 
         # Update Cache
         cog: Optional[XP] = self.bot.get_cog('XP')
@@ -140,6 +141,7 @@ class Settings(commands.Cog):
             cog._get_xp_enabled.cache_clear()
         else:
             log.error(f'Cog not found - {cog}.', exc_info=True)
+            return
 
         # Send Update
         if choice:

@@ -6,7 +6,6 @@ from __future__ import annotations
 # Standard library imports
 from datetime import datetime
 import logging
-from math import floor
 import random
 import re
 
@@ -64,14 +63,13 @@ class XP(commands.Cog):
             return
 
         # Check if xp enabled
-        if not self._get_xp_enabled(message.guild.id):
+        if not await self._get_xp_enabled(message.guild.id):
             return
 
         # Data builder
         conn = self.bot.pool
         guild = message.guild
         author = message.author
-        time = message.created_at
         xp: int = 0
         pre_level: int = 0
 
@@ -82,24 +80,24 @@ class XP(commands.Cog):
 
             if res is not None:
                 elapsed_time: datetime = res['last_xp']
-                if (time - elapsed_time).total_seconds() < 60:
+                if (datetime.now() - elapsed_time).total_seconds() < 60:
                     return
                 xp = res['xp']
                 pre_level = res['level']
 
-            # TODO: Generate XP and data
+            # Generate XP and data
             xp += self._gen_xp(message.content)
             level = self._calc_level(xp)
 
-            # TODO: Update DB
+            # Update DB
             sql = '''INSERT INTO xp (server_id, user_id, xp, level, last_xp)
                      VALUES( $1, $2, $3, $4, $5)
                      ON CONFLICT (server_id, user_id)
-                     DO UPDATE SET xp=xp.xp + $3
-                                   level=$4
+                     DO UPDATE SET xp=$3,
+                                   level=$4,
                                    last_xp=$5
             '''
-            await conn.execute(sql, guild.id, author.id, xp, level, time)
+            await conn.execute(sql, guild.id, author.id, xp, level, datetime.now())
 
             # Emit event for level up
             if (level > pre_level):
@@ -109,8 +107,15 @@ class XP(commands.Cog):
             log.error("Error when giving rep on message.", exc_info=True)
 
     # ________________________ Get XP _______________________
-    @xp_group.command(name='get')
-    @app_commands.describe(member='Gets the xp data for a user.')
+    @ commands.Cog.listener(name='on_xp_level_up')
+    async def on_xp_level_up(self, message: discord.Message, level: int) -> None:
+        print('Ive dispatched')
+        pass
+
+    # ________________________ Get XP _______________________
+
+    @ xp_group.command(name='get')
+    @ app_commands.describe(member='Gets the xp data for a user.')
     async def display_xp(
         self,
         interaction: discord.Interaction,
@@ -122,7 +127,7 @@ class XP(commands.Cog):
         await interaction.response.defer()
 
         # Validation
-        if not self._get_xp_enabled(interaction.guild_id):
+        if not await self._get_xp_enabled(interaction.guild_id):
             return
 
         member = member or interaction.user
@@ -130,13 +135,13 @@ class XP(commands.Cog):
 
         try:
             # Get xp info
-            sql = ''' SELECT * FROM xp 
-                      INNER JOIN logger 
-                      ON 
-                        xp.server_id=logger.server_id 
+            sql = ''' SELECT * FROM xp
+                      INNER JOIN logger
+                      ON
+                        xp.server_id=logger.server_id
                       AND
                         xp.user_id=logger.user_id
-                      WHERE server_id=$1 AND user_id=$2
+                      WHERE xp.server_id=$1 AND xp.user_id=$2
             '''
             res = await conn.execute(sql, interaction.guild_id, member.id)
         except Exception:
@@ -164,8 +169,8 @@ class XP(commands.Cog):
         await interaction.edit_original_message(embed=e)
 
     # _______________________ Give XP  ______________________
-    @commands.command(name='givexp')
-    @commands.has_permissions(administrator=True)
+    @ commands.command(name='givexp')
+    @ commands.has_permissions(administrator=True)
     async def givexp(self, ctx: Context, member: discord.Member, xp: int) -> None:
         """Gives another member xp - Requires admin
 
@@ -173,7 +178,7 @@ class XP(commands.Cog):
         """
 
         # Validation
-        if not self._get_xp_enabled:
+        if not await self._get_xp_enabled(ctx.guild.id):
             return
 
         if xp < 1:
@@ -214,7 +219,7 @@ class XP(commands.Cog):
         Usage: `givexp "username"/@mention/id xp_amt`
         """
         # Validation
-        if not self._get_xp_enabled:
+        if not await self._get_xp_enabled(ctx.guild.id):
             return
 
         # Data builder
@@ -238,7 +243,7 @@ class XP(commands.Cog):
     # _____________________  XP Board  ______________________
     @xp_group.command(name='leaderboard')
     @app_commands.describe(page='Go to a specific page.')
-    async def leaderboard():
+    async def leaderboard(self, interaction: discord.Interaction, page: Optional[int]) -> None:
         """ Display the xp leaderboard for the server. """
         pass
 
@@ -256,13 +261,13 @@ class XP(commands.Cog):
     def _calc_xp(self, level: int) -> int:
         base = 400
         inc = 200
-        return floor((base * level) + (inc * level * (level - 1) * 0.5))
+        return int(base*level + inc*level*(level-1)*0.5)
 
     # _____________________ Calc Level  _____________________
 
     def _calc_level(self, xp: int) -> int:
         level = 1
-        while xp >= self.calcXP(level):
+        while xp >= self._calc_xp(level):
             level += 1
 
         return level
