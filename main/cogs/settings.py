@@ -182,7 +182,7 @@ class Settings(commands.Cog):
     async def set_role_rewards(
         self,
         interaction: discord.Interaction,
-        system: Literal['Rep', 'Xp'],
+        system: Literal['Rep', 'XP'],
         role: discord.Role,
         value: int
     ) -> None:
@@ -200,7 +200,7 @@ class Settings(commands.Cog):
                      ON CONFLICT (server_id, role_id, type)
                      DO UPDATE SET val=$4
             '''
-            await conn.execute(sql, guild.id, role.id, system, value)
+            await conn.execute(sql, guild.id, role.id, system.lower(), value)
 
             msg = f'`{role.name}` has been set as a reward for the `{system}` system.'
             await interaction.edit_original_message(content=msg)
@@ -217,7 +217,7 @@ class Settings(commands.Cog):
     async def remove_role_rewards(
         self,
         interaction: discord.Interaction,
-        system: Literal['Rep', 'Xp'],
+        system: Literal['Rep', 'XP'],
         role: discord.Role
     ):
         """"Remove a role as a reward."""
@@ -234,7 +234,7 @@ class Settings(commands.Cog):
                         (SELECT val FROM rewards 
                         WHERE server_id=$1 AND role_id=$2 AND type=$3)
             '''
-            await conn.execute(sql, guild.id, role.id, system)
+            await conn.execute(sql, guild.id, role.id, system.lower())
 
             msg = f'`{role.name}` has been removed as a reward for the `{system}` system.'
             await interaction.edit_original_message(content=msg)

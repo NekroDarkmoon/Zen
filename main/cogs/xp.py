@@ -80,8 +80,8 @@ class XP(commands.Cog):
 
             if res is not None:
                 elapsed_time: datetime = res['last_xp']
-                if (datetime.now() - elapsed_time).total_seconds() < 60:
-                    return
+                # if (datetime.now() - elapsed_time).total_seconds() < 60:
+                #     return
                 xp = res['xp']
                 pre_level = res['level']
 
@@ -109,11 +109,42 @@ class XP(commands.Cog):
     # ________________________ Get XP _______________________
     @ commands.Cog.listener(name='on_xp_level_up')
     async def on_xp_level_up(self, message: discord.Message, level: int) -> None:
-        print('Ive dispatched')
-        pass
+        # Data builder
+        conn = self.bot.pool
+        member = message.author
+        guild = message.guild
+        roles: list[discord.Role] = list()
+
+        msg = f'`{member.display_name} reached level {level}.`'
+        await message.channel.send(content=msg, delete_after=15)
+
+        try:
+            sql = '''SELECT role_id FROM rewards 
+                     WHERE server_id=$1 AND type=$2 AND val<=$3'''
+            res: list[int] = await conn.fetch(sql, guild.id, 'xp', level)
+
+            if len(res) == 0:
+                return
+
+            for entry in res:
+                if member.get_role(entry['role_id']) is None:
+                    roles.append(guild.get_role(entry['role_id']))
+
+            if len(roles) < 1:
+                return
+
+            await member.add_roles(*roles)
+
+        except Exception:
+            log.error('Error while granting role rewards.', exc_info=True)
+            return
+
+        msg = f'`{member.display_name} gained the following role(s): '
+        msg += f"{', '.join(role.name for role in roles)}`"
+
+        await message.channel.send(content=msg, delete_after=15)
 
     # ________________________ Get XP _______________________
-
     @ xp_group.command(name='get')
     @ app_commands.describe(member='Gets the xp data for a user.')
     async def display_xp(
