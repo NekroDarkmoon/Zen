@@ -115,11 +115,13 @@ class XP(commands.Cog):
         # Build message
         xp: int = res['xp'] if res['xp'] is not None else 0
         level: int = res['level'] if res['level'] is not None else 0
-        next_level: int = None
-        needed_xp: int = None
+        next_level_xp: int = self._calc_xp(level)
+        needed_xp: int = next_level_xp - xp
         num_msgs: int = res['msg_count'] if res['msg_count'] is not None else 0
 
-        msg = ''
+        msg = f'''You are level {level}, with {xp} xp.
+        Level {level + 1} requires a total of {next_level_xp}: You need {needed_xp} more xp.
+        '''
 
         e = discord.Embed(title=member.display_name,
                           color=discord.Color.random())
@@ -161,21 +163,21 @@ class XP(commands.Cog):
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Enabled  _____________________
     # _______________________ Gen XP  _______________________
-    def genXP(self, msg: str) -> int:
+    def _gen_xp(self, msg: str) -> int:
         # TODO: Math it
 
         # FIXME:
         return random.randint(15, 25)
 
     # _____________________ Calc XP  _______________________
-    def calcXP(self, level: int) -> int:
+    def _calc_xp(self, level: int) -> int:
         base = 400
         inc = 200
         return floor((base * level) + (inc * level * (level - 1) * 0.5))
 
     # _____________________ Calc Level  _____________________
 
-    def calcLevel(self, xp: int) -> int:
+    def _calc_level(self, xp: int) -> int:
         level = 1
         while xp >= self.calcXP(level):
             level += 1
