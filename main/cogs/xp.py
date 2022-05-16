@@ -9,7 +9,7 @@ import logging
 import random
 import re
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, TypedDict
 
 # Third party imports
 import discord  # noqa
@@ -19,7 +19,7 @@ from discord.ext import commands
 
 
 # Local application imports
-
+from main.cogs.utils.paginator import SimplePages
 
 if TYPE_CHECKING:
     from main.Zen import Zen
@@ -27,6 +27,33 @@ if TYPE_CHECKING:
 
 
 log = logging.getLogger(__name__)
+NOT_ENABLED = 'Error - System Not Enabled.'
+SYSTEM = 'xp'
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                      Reward Paginator
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class RewardEntry(TypedDict):
+    name: str
+    level: int
+
+
+class RewardPageEntry:
+    __slots__ = ('name', 'level')
+
+    def __init__(self, entry: RewardEntry) -> None:
+        self.name: str = entry['name']
+        self.level: int = entry['level']
+
+    def __str__(self) -> str:
+        return f'{self.name} - {self.level}'
+
+
+class RewardPages(SimplePages):
+    def __init__(self, entries: list[RewardEntry], *, ctx: Context, per_page: int = 12):
+        converted = [RewardPageEntry(entry) for entry in entries]
+        super().__init__(converted, ctx=ctx, per_page=per_page)
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Config
@@ -37,14 +64,12 @@ log = logging.getLogger(__name__)
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Config
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Config
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                          XP
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 class XP(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
@@ -80,8 +105,8 @@ class XP(commands.Cog):
 
             if res is not None:
                 elapsed_time: datetime = res['last_xp']
-                # if (datetime.now() - elapsed_time).total_seconds() < 60:
-                #     return
+                if (datetime.now() - elapsed_time).total_seconds() < 60:
+                    return
                 xp = res['xp']
                 pre_level = res['level']
 
@@ -121,7 +146,7 @@ class XP(commands.Cog):
         try:
             sql = '''SELECT role_id FROM rewards 
                      WHERE server_id=$1 AND type=$2 AND val<=$3'''
-            res: list[int] = await conn.fetch(sql, guild.id, 'xp', level)
+            res: list[int] = await conn.fetch(sql, guild.id, SYSTEM, level)
 
             if len(res) == 0:
                 return
@@ -159,7 +184,7 @@ class XP(commands.Cog):
 
         # Validation
         if not await self._get_xp_enabled(interaction.guild_id):
-            return
+            return await interaction.edit_original_message(content=NOT_ENABLED)
 
         member = member or interaction.user
         conn = self.bot.pool
@@ -210,7 +235,7 @@ class XP(commands.Cog):
 
         # Validation
         if not await self._get_xp_enabled(ctx.guild.id):
-            return
+            return await ctx.reply(content=NOT_ENABLED)
 
         if xp < 1:
             e = discord.Embed(
@@ -251,7 +276,7 @@ class XP(commands.Cog):
         """
         # Validation
         if not await self._get_xp_enabled(ctx.guild.id):
-            return
+            return await ctx.reply(content=NOT_ENABLED)
 
         # Data builder
         conn = self.bot.pool
@@ -276,10 +301,51 @@ class XP(commands.Cog):
     @app_commands.describe(page='Go to a specific page.')
     async def leaderboard(self, interaction: discord.Interaction, page: Optional[int]) -> None:
         """ Display the xp leaderboard for the server. """
+        # Defer
+        await interaction.response.defer()
+
+        # Validation
+        if not await self._get_xp_enabled(interaction.guild_id):
+            return await interaction.edit_original_message(content=NOT_ENABLED)
+
         pass
 
     # _____________________ XP Enabled  _____________________
-    # _____________________ XP Enabled  _____________________
+    # _____________________ XP Rewards  _____________________
+    @xp_group.command(name='rewards')
+    async def rewards(self, interaction: discord.Interaction) -> None:
+        """ Display xp associated rewards. """
+        # Defer
+        await interaction.response.defer()
+
+        # Validation
+        if not await self._get_xp_enabled(interaction.guild_id):
+            return await interaction.edit_original_message(content=NOT_ENABLED)
+
+        conn = self.bot.pool
+        guild = interaction.guild
+        try:
+            sql = '''SELECT role_id, val FROM rewards WHERE
+                     server_id=$1 AND type=$2
+                     ORDER BY val ASC'''
+            rows = await conn.fetch(sql, guild.id, SYSTEM)
+        except Exception:
+            log.error('Error while displaying rewards.', exc_info=True)
+
+        if len(rows) == 0:
+            return
+
+        # Convert to usable data
+        data = [{'name': guild.get_role(
+            row['role_id']), 'level': row['val'], } for row in rows]
+
+        # Start paginator
+        ctx = await commands.Context.from_interaction(interaction)
+        p = RewardPages(
+            entries=data, ctx=ctx)
+        p.embed.set_author(name=interaction.user.display_name)
+        await p.start()
+
     # _______________________ Gen XP  _______________________
 
     def _gen_xp(self, msg: str) -> int:
@@ -295,7 +361,6 @@ class XP(commands.Cog):
         return int(base*level + inc*level*(level-1)*0.5)
 
     # _____________________ Calc Level  _____________________
-
     def _calc_level(self, xp: int) -> int:
         level = 1
         while xp >= self._calc_xp(level):
