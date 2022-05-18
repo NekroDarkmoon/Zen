@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 
 # Third party imports
 import discord
+from tabulate import tabulate
 
 from discord.ext import commands
 from discord.ext.commands import Paginator as CommandPaginator
@@ -265,7 +266,7 @@ class FieldPageSource(menus.ListPageSource):
 
         max = self.get_max_pages()
         if max > 1:
-            text = f'Page {menu.current_page + 1}/{max} ({len(self.entries)} emtries)'
+            text = f'Page {menu.current_page + 1}/{max} ({len(self.entries)} entries)'
 
         return self.embed
 
@@ -323,9 +324,35 @@ class SimplePages(ZenPages):
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Imports
+#                   Tabular Pages Source
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class TabularPagesSource(menus.ListPageSource):
+    def __init__(self, entries, headers: list[str], *, per_page: int) -> None:
+        self.headers = headers
+        super().__init__(entries, per_page=per_page)
+
+    async def format_page(self, menu, entries) -> discord.Embed:
+        pages = list()
+        for idx, entry in enumerate(entries, start=menu.current_page * self.per_page):
+            content = tabulate(entry, self.headers, tablefmt='simple',
+                               stralign='left', numalign='center')
+            pages.append(content)
+
+        print(pages)
+
+        maximum = self.get_max_pages()
+        if maximum > 1:
+            footer = f'Page {menu.current_page + 1}/{maximum} ({len(self.entries)} entries)'
+            menu.embed.set_footer(text=footer)
+
+        menu.embed.description = '\n'.join(pages)
+        return menu.embed
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class TabularPages(ZenPages):
+    def __init__(self, entries, *, ctx: Context, per_page: int = 15) -> None:
+        super().__init__(TabularPagesSource(entries, headers, per_page=per_page), ctx=ctx)
+        self.embed = discord.Embed(color=discord.Color.random())
