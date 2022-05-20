@@ -333,19 +333,20 @@ class TabularPagesSource(menus.ListPageSource):
 
     async def format_page(self, menu, entries) -> discord.Embed:
         pages = list()
-        for idx, entry in enumerate(entries, start=menu.current_page * self.per_page):
-            content = tabulate(entry, self.headers, tablefmt='simple',
-                               stralign='left', numalign='center')
-            pages.append(content)
 
-        print(pages)
+        # Split into pages
+        item_num = menu.current_page * self.per_page
+        curr_page = entries[item_num: item_num + self.per_page]
+
+        content = tabulate(curr_page, self.headers, tablefmt='simple',
+                           stralign='left', numalign='center')
 
         maximum = self.get_max_pages()
         if maximum > 1:
             footer = f'Page {menu.current_page + 1}/{maximum} ({len(self.entries)} entries)'
             menu.embed.set_footer(text=footer)
 
-        menu.embed.description = '\n'.join(pages)
+        menu.embed.description = f'```{content}```'
         return menu.embed
 
 

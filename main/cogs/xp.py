@@ -33,44 +33,8 @@ SYSTEM = 'xp'
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                      Reward Paginator
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-class RewardEntry(TypedDict):
-    name: str
-    level: int
-
-
-class RewardPageEntry:
-    __slots__ = ('name', 'level')
-
-    def __init__(self, entry: RewardEntry) -> None:
-        self.name: str = entry['name']
-        self.level: int = entry['level']
-
-    def __str__(self) -> str:
-        return f'{self.name} - {self.level}'
-
-
-class RewardPages(SimplePages):
-    def __init__(self, entries: list[RewardEntry], *, ctx: Context, per_page: int = 12):
-        converted = [RewardPageEntry(entry) for entry in entries]
-        super().__init__(converted, ctx=ctx, per_page=per_page)
-
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Config
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Config
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Config
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                          XP
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 class XP(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
@@ -337,14 +301,16 @@ class XP(commands.Cog):
             return
 
         # Convert to usable data
-        data = [{'name': guild.get_role(
-            row['role_id']), 'level': row['val'], } for row in rows]
+
+        data = [[guild.get_role(row['role_id']).name, row['val']]
+                for row in rows]
+        headers = ['Role', 'Level']
 
         # Start paginator
         ctx = await commands.Context.from_interaction(interaction)
 
         p = TabularPages(
-            entries=data, ctx=ctx, headers=None)
+            entries=data, ctx=ctx, headers=headers)
         p.embed.set_author(name=interaction.user.display_name)
         await p.start()
 
