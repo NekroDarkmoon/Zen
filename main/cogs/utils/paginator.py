@@ -353,6 +353,6 @@ class TabularPagesSource(menus.ListPageSource):
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class TabularPages(ZenPages):
-    def __init__(self, entries, *, ctx: Context, per_page: int = 15) -> None:
+    def __init__(self, entries, *, ctx: Context, headers: list[str], per_page: int = 15) -> None:
         super().__init__(TabularPagesSource(entries, headers, per_page=per_page), ctx=ctx)
         self.embed = discord.Embed(color=discord.Color.random())

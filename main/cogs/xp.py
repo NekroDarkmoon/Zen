@@ -20,6 +20,7 @@ from discord.ext import commands
 
 # Local application imports
 from main.cogs.utils.paginator import SimplePages
+from main.cogs.utils.paginator import TabularPages
 
 if TYPE_CHECKING:
     from main.Zen import Zen
@@ -341,8 +342,9 @@ class XP(commands.Cog):
 
         # Start paginator
         ctx = await commands.Context.from_interaction(interaction)
-        p = RewardPages(
-            entries=data, ctx=ctx)
+
+        p = TabularPages(
+            entries=data, ctx=ctx, headers=None)
         p.embed.set_author(name=interaction.user.display_name)
         await p.start()
 
