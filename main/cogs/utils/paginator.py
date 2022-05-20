@@ -213,7 +213,7 @@ class ZenPages(discord.ui.View):
 
     @discord.ui.button(label='Skip to page...', style=discord.ButtonStyle.grey)
     async def numbered_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """lets you type a page number to go to"""
+        """Lets you type a page number to go to"""
         if self.input_lock.locked():
             await interaction.response.send_message('Already waiting for your response...', ephemeral=True)
             return
@@ -227,7 +227,7 @@ class ZenPages(discord.ui.View):
             await interaction.response.send_message('What page do you want to go to?', ephemeral=True)
 
             def message_check(m):
-                return m.author.id == author_id and channel == m.channel and m.content.isdigit()
+                return m.author.id == author_id and channel.id == m.channel.id and m.content.isdigit()
 
             try:
                 msg = await self.ctx.bot.wait_for('message', check=message_check, timeout=30.0)
@@ -332,13 +332,7 @@ class TabularPagesSource(menus.ListPageSource):
         super().__init__(entries, per_page=per_page)
 
     async def format_page(self, menu, entries) -> discord.Embed:
-        pages = list()
-
-        # Split into pages
-        item_num = menu.current_page * self.per_page
-        curr_page = entries[item_num: item_num + self.per_page]
-
-        content = tabulate(curr_page, self.headers, tablefmt='simple',
+        content = tabulate(entries, self.headers, tablefmt='simple',
                            stralign='left', numalign='center')
 
         maximum = self.get_max_pages()
@@ -354,6 +348,6 @@ class TabularPagesSource(menus.ListPageSource):
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class TabularPages(ZenPages):
-    def __init__(self, entries, *, ctx: Context, headers: list[str], per_page: int = 15) -> None:
+    def __init__(self, entries, *, ctx: Context, headers: list[str], per_page: int = 12) -> None:
         super().__init__(TabularPagesSource(entries, headers, per_page=per_page), ctx=ctx)
         self.embed = discord.Embed(color=discord.Color.random())

@@ -215,7 +215,7 @@ class XP(commands.Cog):
             sql = '''SELECT * FROM xp WHERE server_id=$1 AND user_id=$2'''
             res = await conn.fetchrow(sql, ctx.guild.id, member.id)
 
-            new_xp = res['xp'] + xp if res['xp'] is not None else xp
+            new_xp = res['xp'] + xp if res is not None else xp
             level = self._calc_level(new_xp)
 
             sql = '''INSERT INTO xp(server_id, user_id, xp, level)
@@ -272,6 +272,39 @@ class XP(commands.Cog):
         # Validation
         if not await self._get_xp_enabled(interaction.guild_id):
             return await interaction.edit_original_message(content=NOT_ENABLED)
+
+        guild = interaction.guild
+        conn = self.bot.pool
+
+        # Get data
+        try:
+            sql = '''SELECT 
+                     RANK () OVER (
+                         ORDER BY xp DESC
+                     ) rank, 
+                     user_id, xp, level FROM xp 
+                     WHERE server_id=$1
+                     LIMIT 50'''
+
+            rows = await conn.fetch(sql, interaction.guild_id)
+        except Exception:
+            log.error('Error while retrieving xp data', exc_info=True)
+
+        # Make data usable
+        data = [{
+            'Rank': row['rank'],
+            'User': (await self.bot.get_or_fetch_member(guild, row['user_id'])).__str__(),
+            'Level': row['level'],
+            'XP': row['xp'],
+        } for row in rows]
+
+        # Start paginator
+        ctx = await commands.Context.from_interaction(interaction)
+
+        p = TabularPages(
+            entries=data, ctx=ctx, headers='keys')
+        p.embed.set_author(name=interaction.user.display_name)
+        await p.start()
 
         pass
 
