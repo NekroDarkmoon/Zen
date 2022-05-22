@@ -24,28 +24,27 @@ from main.cogs.utils.paginator import TabularPages
 
 if TYPE_CHECKING:
     from main.Zen import Zen
-    from utils.context import Context
+    from main.cogs.utils.context import Context
 
 
 log = logging.getLogger(__name__)
 NOT_ENABLED = 'Error - System Not Enabled.'
-SYSTEM = 'xp'
+SYSTEM = 'rep'
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                          XP
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-class XP(commands.Cog):
+class Rep(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
 
     # --------------------------------------------------
     #               App Commands Settings
-    xp_group = app_commands.Group(
-        name='xp', description='XP Commands.')
+    rep_group = app_commands.Group(
+        name='rep', description='Rep Commands.')
 
-    # ______________________ Give XP _______________________
-
+    # ______________________ Give Rep _______________________
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         # Validation
@@ -97,8 +96,8 @@ class XP(commands.Cog):
             log.error("Error when giving rep on message.", exc_info=True)
 
     # ________________________ Get XP _______________________
-    @ commands.Cog.listener(name='on_xp_level_up')
-    async def on_xp_level_up(self, message: discord.Message, level: int) -> None:
+    @commands.Cog.listener(name='on_rep_received')
+    async def on_rep_received(self, message: discord.Message, level: int) -> None:
         # Data builder
         conn = self.bot.pool
         member = message.author
@@ -135,14 +134,14 @@ class XP(commands.Cog):
         await message.channel.send(content=msg, delete_after=15)
 
     # ________________________ Get XP _______________________
-    @ xp_group.command(name='get')
-    @ app_commands.describe(member='Gets the xp data for a user.')
+    @rep_group.command(name='get')
+    @app_commands.describe(member='Gets the rep data for a user.')
     async def display_xp(
         self,
         interaction: discord.Interaction,
         member: Optional[discord.Member] = None
     ) -> None:
-        """ Get the xp information of a member or yourself. """
+        """ Get the rep information of a member or yourself. """
 
         # Defer
         await interaction.response.defer()
@@ -190,12 +189,12 @@ class XP(commands.Cog):
         await interaction.edit_original_message(embed=e)
 
     # _______________________ Give XP  ______________________
-    @ commands.command(name='givexp')
-    @ commands.has_permissions(administrator=True)
-    async def givexp(self, ctx: Context, member: discord.Member, xp: int) -> None:
-        """Gives another member xp - Requires admin
+    @rep_group.command('give')
+    @app_commands.describe(member='User to give rep.', rep='Rep amount')
+    async def givexp(self, ctx: Context, member: discord.Member, rep: int) -> None:
+        """Gives another member rep - Requires admin
 
-        Usage: `givexp "username"/@mention/id xp_amt`
+        Usage: `giverep "username"/@mention/id xp_amt`
         """
 
         # Validation
@@ -232,12 +231,12 @@ class XP(commands.Cog):
         await ctx.reply(f'{member.display_name} now has {new_xp} xp.')
 
     # ______________________ Set XP  ______________________
-    @commands.command(name='setxp')
+    @commands.command(name='setrep')
     @commands.has_permissions(administrator=True)
-    async def setxp(self, ctx: Context, member: discord.Member, xp: int) -> None:
-        """Set the xp for a member - Requires admin
+    async def setrep(self, ctx: Context, member: discord.Member, rep: int) -> None:
+        """Set the rep for a member - Requires admin
 
-        Usage: `givexp "username"/@mention/id xp_amt`
+        Usage: `setrep "username"/@mention/id rep_amt`
         """
         # Validation
         if not await self._get_xp_enabled(ctx.guild.id):
@@ -245,32 +244,31 @@ class XP(commands.Cog):
 
         # Data builder
         conn = self.bot.pool
-        level = self._calc_level(xp)
 
         try:
-            sql = '''INSERT INTO xp(server_id, user_id, xp, level)
-                     VALUES($1, $2, $3, $4)
+            sql = '''INSERT INTO rep(server_id, user_id, rep)
+                     VALUES($1, $2, $3)
                      ON CONFLICT (server_id, user_id)
-                     DO UPDATE SET xp=$3, level=$4
+                     DO UPDATE SET rep=$3
             '''
-            await conn.execute(sql, ctx.guild.id, member.id, xp, level)
+            await conn.execute(sql, ctx.guild.id, member.id, rep)
 
         except Exception:
-            log.error("Error while getting xp data.", exc_info=True)
+            log.error("Error while getting rep data.", exc_info=True)
             return
 
-        await ctx.reply(f'{member.display_name} now has {xp} xp.')
+        await ctx.reply(f'{member.display_name} now has {rep} rep.')
 
     # _____________________  XP Board  ______________________
-    @xp_group.command(name='leaderboard')
+    @rep_group.command(name='leaderboard')
     @app_commands.describe(page='Go to a specific page.')
     async def leaderboard(self, interaction: discord.Interaction, page: Optional[int]) -> None:
-        """ Display the xp leaderboard for the server. """
+        """ Display the Rep leaderboard for the server. """
         # Defer
         await interaction.response.defer()
 
         # Validation
-        if not await self._get_xp_enabled(interaction.guild_id):
+        if not await self._get_rep_enabled(interaction.guild_id):
             return await interaction.edit_original_message(content=NOT_ENABLED)
 
         guild = interaction.guild
@@ -280,22 +278,21 @@ class XP(commands.Cog):
         try:
             sql = '''SELECT 
                      RANK () OVER (
-                         ORDER BY xp DESC
+                         ORDER BY rep DESC
                      ) rank, 
-                     user_id, xp, level FROM xp 
+                     user_id, rep FROM rep 
                      WHERE server_id=$1
                      LIMIT 50'''
 
             rows = await conn.fetch(sql, interaction.guild_id)
         except Exception:
-            log.error('Error while retrieving xp data', exc_info=True)
+            log.error('Error while retrieving rep data', exc_info=True)
 
         # Make data usable
         data = [{
             'Rank': row['rank'],
             'User': (await self.bot.get_or_fetch_member(guild, row['user_id'])).__str__(),
-            'Level': row['level'],
-            'XP': row['xp'],
+            'Rep': row['rep'],
         } for row in rows]
 
         # Start paginator
@@ -308,14 +305,14 @@ class XP(commands.Cog):
 
     # _____________________ XP Enabled  _____________________
     # _____________________ XP Rewards  _____________________
-    @xp_group.command(name='rewards')
+    @rep_group.command(name='rewards')
     async def rewards(self, interaction: discord.Interaction) -> None:
-        """ Display xp associated rewards. """
+        """ Display rep associated rewards. """
         # Defer
         await interaction.response.defer()
 
         # Validation
-        if not await self._get_xp_enabled(interaction.guild_id):
+        if not await self._get_rep_enabled(interaction.guild_id):
             return await interaction.edit_original_message(content=NOT_ENABLED)
 
         conn = self.bot.pool
@@ -345,55 +342,28 @@ class XP(commands.Cog):
         p.embed.set_author(name=interaction.user.display_name)
         await p.start()
 
-    # _______________________ Gen XP  _______________________
-
-    def _gen_xp(self, msg: str) -> int:
-        # TODO: Math it
-
-        # FIXME:
-        return random.randint(15, 25)
-
-    # _____________________ Calc XP  _______________________
-    def _calc_xp(self, level: int) -> int:
-        base = 400
-        inc = 200
-        return int(base*level + inc*level*(level-1)*0.5)
-
-    # _____________________ Calc Level  _____________________
-    def _calc_level(self, xp: int) -> int:
-        level = 1
-        while xp >= self._calc_xp(level):
-            level += 1
-
-        return level
-
     # _____________________ Get Last Message  _____________________
-    async def _get_last_msg(self):
-        # TODO: Implementation
-        pass
-
-    # _____________________ XP Enabled  _____________________
-
+    # _____________________ Rep Enabled  _____________________
     @alru_cache(maxsize=128)
-    async def _get_xp_enabled(self, server_id: int) -> Optional[bool]:
+    async def _get_rep_enabled(self, server_id: int) -> Optional[bool]:
         # Get pool
         conn = self.bot.pool
 
         try:
-            sql = 'SELECT enable_leveling FROM settings WHERE server_id=$1'
+            sql = 'SELECT enable_rep FROM settings WHERE server_id=$1'
             res = await conn.fetchrow(sql, server_id)
 
             if res is not None:
-                return res['enable_leveling']
+                return res['enable_rep']
             else:
                 return None
 
         except Exception:
-            log.error('Error while checking enabled xp.', exc_info=True)
+            log.error('Error while checking enabled rep.', exc_info=True)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 async def setup(bot: Zen):
-    await bot.add_cog(XP(bot))
+    await bot.add_cog(Rep(bot))
