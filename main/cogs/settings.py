@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from utils.context import Context
     from main.cogs.logging import Logging
     from main.cogs.xp import XP
+    from main.cogs.rep import Rep
 
 
 log = logging.getLogger(__name__)
@@ -157,7 +158,38 @@ class Settings(commands.Cog):
     @app_commands.describe(choice='On or Off')
     async def enable_rep(self, interaction: discord.Interaction, choice: bool) -> None:
         """Enable the reputation system for this guild."""
-        ...
+        # Defer
+        await interaction.response.defer()
+        conn = self.bot.pool
+
+        # Check if exists
+        await self._check_existence(interaction.guild_id)
+
+        # Update
+        try:
+            sql = '''UPDATE settings SET enable_rep=$2
+                      WHERE server_id=$1'''
+            await conn.execute(sql, interaction.guild_id, choice)
+
+        except Exception:
+            log.error('Error while updating rep settings.', exc_info=True)
+            return
+
+        # Update Cache
+        cog: Optional[Rep] = self.bot.get_cog('Rep')
+        if cog is not None:
+            cog._get_rep_enabled.cache_clear()
+        else:
+            log.error(f'Cog not found - {cog}.', exc_info=True)
+            return
+
+        # Send Update
+        if choice:
+            msg = 'Rep system is now enabled'
+        else:
+            msg = 'Rep system is now disabled.'
+
+        await interaction.edit_original_message(content=msg)
 
      # ________________ Enable Playchannels  ___________________
     @settings_group.command(name='enableplaychns')

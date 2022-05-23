@@ -47,55 +47,56 @@ class Rep(commands.Cog):
     # ______________________ Give Rep _______________________
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # Validation
-        if re.search(r"^[^\"\'\.\w]", message.content) or message.author.bot:
+        # Check if xp enabled
+        if not await self._get_rep_enabled(message.guild.id):
             return
 
-        # Check if xp enabled
-        if not await self._get_xp_enabled(message.guild.id):
+        def check(msg):
+            checks = [
+                r'(?<!no )(?<![A-z])th(a?n?(k|x)s?)(?![A-z])',
+                r'(?<!no )(?<![A-z])ty(vm)?(?![A-z])',
+                r'(?<![A-z])dankee?(?![A-z])',
+                r'(?<![A-z])ありがとう?(?![A-z])',
+                r':upvote:',
+            ]
+
+            return any([re.search(x, msg) for x in checks])
+
+        print(check(message.content.lower()))
+        if len(message.mentions) == 0 or not check(message.content.lower()):
             return
 
         # Data builder
         conn = self.bot.pool
         guild = message.guild
         author = message.author
-        xp: int = 0
-        pre_level: int = 0
+        users = [u for u in message.mentions if u.id !=
+                 author.id and not u.bot]
+
+        print(users)
+        if len(users) == 0:
+            return
 
         try:
-            # Time Validation
-            sql = '''SELECT * FROM xp WHERE server_id=$1 AND user_id=$2'''
-            res = await conn.fetchrow(sql, guild.id, author.id)
-
-            if res is not None:
-                elapsed_time: datetime = res['last_xp']
-                if (datetime.now() - elapsed_time).total_seconds() < 60:
-                    return
-                xp = res['xp']
-                pre_level = res['level']
-
-            # Generate XP and data
-            xp += self._gen_xp(message.content)
-            level = self._calc_level(xp)
-
-            # Update DB
-            sql = '''INSERT INTO xp (server_id, user_id, xp, level, last_xp)
-                     VALUES( $1, $2, $3, $4, $5)
+            sql = '''INSERT INTO rep (server_id, user_id, rep)
+                     VALUES ($1, $2, $3)
                      ON CONFLICT (server_id, user_id)
-                     DO UPDATE SET xp=$3,
-                                   level=$4,
-                                   last_xp=$5
-            '''
-            await conn.execute(sql, guild.id, author.id, xp, level, datetime.now())
+                     DO UPDATE SET rep=rep.rep + $3
+                     '''
+            vals = [(guild.id, u.id, 1) for u in users]
+            await conn.executemany(sql, vals)
 
-            # Emit event for level up
-            if (level > pre_level):
-                self.bot.dispatch("xp_level_up", message, level)
+            self.bot.dispatch('rep_given', guild, users)
 
         except Exception:
             log.error("Error when giving rep on message.", exc_info=True)
+            return
+
+        msg = f'`Gave rep to {", ".join([u.display_name for u in users])}`'
+        await message.reply(content=msg)
 
     # ________________________ Get XP _______________________
+
     @commands.Cog.listener(name='on_rep_received')
     async def on_rep_received(self, message: discord.Message, level: int) -> None:
         # Data builder
@@ -134,101 +135,101 @@ class Rep(commands.Cog):
         await message.channel.send(content=msg, delete_after=15)
 
     # ________________________ Get XP _______________________
-    @rep_group.command(name='get')
-    @app_commands.describe(member='Gets the rep data for a user.')
-    async def display_xp(
-        self,
-        interaction: discord.Interaction,
-        member: Optional[discord.Member] = None
-    ) -> None:
-        """ Get the rep information of a member or yourself. """
+    # @rep_group.command(name='get')
+    # @app_commands.describe(member='Gets the rep data for a user.')
+    # async def display_xp(
+    #     self,
+    #     interaction: discord.Interaction,
+    #     member: Optional[discord.Member] = None
+    # ) -> None:
+    #     """ Get the rep information of a member or yourself. """
 
-        # Defer
-        await interaction.response.defer()
+    #     # Defer
+    #     await interaction.response.defer()
 
-        # Validation
-        if not await self._get_xp_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+    #     # Validation
+    #     if not await self._get_xp_enabled(interaction.guild_id):
+    #         return await interaction.edit_original_message(content=NOT_ENABLED)
 
-        member = member or interaction.user
-        conn = self.bot.pool
+    #     member = member or interaction.user
+    #     conn = self.bot.pool
 
-        try:
-            # Get xp info
-            sql = ''' SELECT * FROM xp
-                      INNER JOIN logger
-                      ON
-                        xp.server_id=logger.server_id
-                      AND
-                        xp.user_id=logger.user_id
-                      WHERE xp.server_id=$1 AND xp.user_id=$2
-            '''
-            res = await conn.fetchrow(sql, interaction.guild_id, member.id)
-        except Exception:
-            log.error("Error while getting xp data.", exc_info=True)
+    #     try:
+    #         # Get xp info
+    #         sql = ''' SELECT * FROM xp
+    #                   INNER JOIN logger
+    #                   ON
+    #                     xp.server_id=logger.server_id
+    #                   AND
+    #                     xp.user_id=logger.user_id
+    #                   WHERE xp.server_id=$1 AND xp.user_id=$2
+    #         '''
+    #         res = await conn.fetchrow(sql, interaction.guild_id, member.id)
+    #     except Exception:
+    #         log.error("Error while getting xp data.", exc_info=True)
 
-        # Build message
-        xp: int = res['xp'] if res is not None else 0
-        level: int = res['level'] if res is not None else 0
-        next_level_xp: int = self._calc_xp(level)
-        needed_xp: int = next_level_xp - xp
-        num_msgs: int = res['msg_count'] if res is not None else 0
+    #     # Build message
+    #     xp: int = res['xp'] if res is not None else 0
+    #     level: int = res['level'] if res is not None else 0
+    #     next_level_xp: int = self._calc_xp(level)
+    #     needed_xp: int = next_level_xp - xp
+    #     num_msgs: int = res['msg_count'] if res is not None else 0
 
-        msg = f'''You are level {level}, with {xp} xp.
-        Level {level + 1} requires a total of {next_level_xp}: You need {needed_xp} more xp.
-        '''
+    #     msg = f'''You are level {level}, with {xp} xp.
+    #     Level {level + 1} requires a total of {next_level_xp}: You need {needed_xp} more xp.
+    #     '''
 
-        e = discord.Embed(title=member.display_name,
-                          color=discord.Color.random())
-        e.description = msg
-        e.set_thumbnail(url=member.display_avatar.url)
-        e.add_field(name='XP', value=f'{xp}/{next_level_xp}', inline=True)
-        e.add_field(name='Level', value=level, inline=True)
-        e.add_field(name='Messages', value=num_msgs, inline=True)
+    #     e = discord.Embed(title=member.display_name,
+    #                       color=discord.Color.random())
+    #     e.description = msg
+    #     e.set_thumbnail(url=member.display_avatar.url)
+    #     e.add_field(name='XP', value=f'{xp}/{next_level_xp}', inline=True)
+    #     e.add_field(name='Level', value=level, inline=True)
+    #     e.add_field(name='Messages', value=num_msgs, inline=True)
 
-        await interaction.edit_original_message(embed=e)
+    #     await interaction.edit_original_message(embed=e)
 
-    # _______________________ Give XP  ______________________
-    @rep_group.command('give')
-    @app_commands.describe(member='User to give rep.', rep='Rep amount')
-    async def givexp(self, ctx: Context, member: discord.Member, rep: int) -> None:
-        """Gives another member rep - Requires admin
+    # # _______________________ Give XP  ______________________
+    # @rep_group.command('give')
+    # @app_commands.describe(member='User to give rep.', rep='Rep amount')
+    # async def givexp(self, ctx: Context, member: discord.Member, rep: int) -> None:
+    #     """Gives another member rep - Requires admin
 
-        Usage: `giverep "username"/@mention/id xp_amt`
-        """
+    #     Usage: `giverep "username"/@mention/id xp_amt`
+    #     """
 
-        # Validation
-        if not await self._get_xp_enabled(ctx.guild.id):
-            return await ctx.reply(content=NOT_ENABLED)
+    #     # Validation
+    #     if not await self._get_xp_enabled(ctx.guild.id):
+    #         return await ctx.reply(content=NOT_ENABLED)
 
-        if xp < 1:
-            e = discord.Embed(
-                title='Error.',
-                description='Unable to give none/negative xp.',
-                color=discord.Color.red())
-            await ctx.send(embed=e)
+    #     if xp < 1:
+    #         e = discord.Embed(
+    #             title='Error.',
+    #             description='Unable to give none/negative xp.',
+    #             color=discord.Color.red())
+    #         await ctx.send(embed=e)
 
-        conn = self.bot.pool
+    #     conn = self.bot.pool
 
-        try:
-            sql = '''SELECT * FROM xp WHERE server_id=$1 AND user_id=$2'''
-            res = await conn.fetchrow(sql, ctx.guild.id, member.id)
+    #     try:
+    #         sql = '''SELECT * FROM xp WHERE server_id=$1 AND user_id=$2'''
+    #         res = await conn.fetchrow(sql, ctx.guild.id, member.id)
 
-            new_xp = res['xp'] + xp if res is not None else xp
-            level = self._calc_level(new_xp)
+    #         new_xp = res['xp'] + xp if res is not None else xp
+    #         level = self._calc_level(new_xp)
 
-            sql = '''INSERT INTO xp(server_id, user_id, xp, level)
-                     VALUES($1, $2, $3, $4)
-                     ON CONFLICT (server_id, user_id)
-                     DO UPDATE SET xp=$3, level=$4
-                '''
-            await conn.execute(sql, ctx.guild.id, member.id, new_xp, level)
+    #         sql = '''INSERT INTO xp(server_id, user_id, xp, level)
+    #                  VALUES($1, $2, $3, $4)
+    #                  ON CONFLICT (server_id, user_id)
+    #                  DO UPDATE SET xp=$3, level=$4
+    #             '''
+    #         await conn.execute(sql, ctx.guild.id, member.id, new_xp, level)
 
-        except Exception:
-            log.error("Error while getting xp data.", exc_info=True)
-            return
+    #     except Exception:
+    #         log.error("Error while getting xp data.", exc_info=True)
+    #         return
 
-        await ctx.reply(f'{member.display_name} now has {new_xp} xp.')
+    #     await ctx.reply(f'{member.display_name} now has {new_xp} xp.')
 
     # ______________________ Set XP  ______________________
     @commands.command(name='setrep')
