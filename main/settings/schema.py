@@ -21,7 +21,7 @@ tables: dict = {
         channel_id BIGINT NOT NULL,
         last_msg TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_gave_rep TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        msg_count BIGINT NOT NULL,
+        msg_count BIGINT NOT NULL DEFAULT 0,
         PRIMARY KEY (server_id, user_id)
     ''',
 

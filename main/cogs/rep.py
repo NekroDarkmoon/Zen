@@ -192,46 +192,70 @@ class Rep(commands.Cog):
         await interaction.edit_original_message(embed=e)
 
     # # _______________________ Give XP  ______________________
-    # @rep_group.command('give')
-    # @app_commands.describe(member='User to give rep.', rep='Rep amount')
-    # async def givexp(self, ctx: Context, member: discord.Member, rep: int) -> None:
-    #     """Gives another member rep - Requires admin
+    @rep_group.command(name='give')
+    @app_commands.describe(member='User to give rep.', rep='Rep amount')
+    async def giverep(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        rep: Optional[int]
+    ) -> None:
+        """Gives another member rep - Requires admin
+        """
+        # Defer
+        await interaction.response.defer()
+        rep = rep if rep is not None else 1
 
-    #     Usage: `giverep "username"/@mention/id xp_amt`
-    #     """
+        # Validation
+        if not await self._get_rep_enabled(interaction.guild_id):
+            return await interaction.edit_original_message(content=NOT_ENABLED)
 
-    #     # Validation
-    #     if not await self._get_xp_enabled(ctx.guild.id):
-    #         return await ctx.reply(content=NOT_ENABLED)
+        is_admin = interaction.user.guild_permissions.administrator
+        if (rep > 1 or rep < 1) and not is_admin:
+            e = discord.Embed(
+                title='Error.',
+                description='Not authorized to give multi rep',
+                color=discord.Color.red())
+            await interaction.edit_original_message(embed=e)
 
-    #     if xp < 1:
-    #         e = discord.Embed(
-    #             title='Error.',
-    #             description='Unable to give none/negative xp.',
-    #             color=discord.Color.red())
-    #         await ctx.send(embed=e)
+        if (member.id == interaction.user.id) and not is_admin:
+            e = discord.Embed(
+                title='Error.',
+                description="Can't give rep to yourself.",
+                color=discord.Color.red())
+            await interaction.edit_original_message(embed=e)
 
-    #     conn = self.bot.pool
+        # Data builder
+        conn = self.bot.pool
+        now = datetime.now()
+        guild = interaction.guild
+        author = interaction.user
 
-    #     try:
-    #         sql = '''SELECT * FROM xp WHERE server_id=$1 AND user_id=$2'''
-    #         res = await conn.fetchrow(sql, ctx.guild.id, member.id)
+        try:
+            sql = '''SELECT * FROM rep WHERE server_id=$1 AND user_id=$2'''
+            res = await conn.fetchrow(sql, guild.id, member.id)
 
-    #         new_xp = res['xp'] + xp if res is not None else xp
-    #         level = self._calc_level(new_xp)
+            new_rep = res['rep'] + rep if res is not None else rep
 
-    #         sql = '''INSERT INTO xp(server_id, user_id, xp, level)
-    #                  VALUES($1, $2, $3, $4)
-    #                  ON CONFLICT (server_id, user_id)
-    #                  DO UPDATE SET xp=$3, level=$4
-    #             '''
-    #         await conn.execute(sql, ctx.guild.id, member.id, new_xp, level)
+            sql = '''INSERT INTO rep(server_id, user_id, rep)
+                     VALUES($1, $2, $3)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET rep=$3, last_received=$4
+                '''
+            await conn.execute(sql, guild.id, member.id, new_rep, now)
 
-    #     except Exception:
-    #         log.error("Error while getting xp data.", exc_info=True)
-    #         return
+            sql = '''INSERT INTO logger (server_id, user_id, channel_id, last_gave_rep)
+                     VALUES ($1, $2, $3, $4)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET last_gave_rep=$4
+                     '''
+            await conn.execute(sql, guild.id, author.id, interaction.channel_id, now)
 
-    #     await ctx.reply(f'{member.display_name} now has {new_xp} xp.')
+        except Exception:
+            log.error("Error while getting xp data.", exc_info=True)
+            return
+
+        await interaction.edit_original_message(content=f'{member.display_name} now has {new_rep} rep.')
 
     # ______________________ Set XP  ______________________
     @commands.command(name='setrep')
