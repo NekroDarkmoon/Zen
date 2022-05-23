@@ -9,7 +9,7 @@ import logging
 import random
 import re
 
-from typing import TYPE_CHECKING, Optional, TypedDict
+from typing import TYPE_CHECKING, Literal, Optional
 
 # Third party imports
 import discord  # noqa
@@ -19,8 +19,8 @@ from discord.ext import commands
 
 
 # Local application imports
-from main.cogs.utils.paginator import SimplePages
 from main.cogs.utils.paginator import TabularPages
+from main.cogs.utils.formats import format_dt
 
 if TYPE_CHECKING:
     from main.Zen import Zen
@@ -62,7 +62,6 @@ class Rep(commands.Cog):
 
             return any([re.search(x, msg) for x in checks])
 
-        print(check(message.content.lower()))
         if len(message.mentions) == 0 or not check(message.content.lower()):
             return
 
@@ -72,8 +71,8 @@ class Rep(commands.Cog):
         author = message.author
         users = [u for u in message.mentions if u.id !=
                  author.id and not u.bot]
+        now = datetime.now()
 
-        print(users)
         if len(users) == 0:
             return
 
@@ -81,12 +80,20 @@ class Rep(commands.Cog):
             sql = '''INSERT INTO rep (server_id, user_id, rep)
                      VALUES ($1, $2, $3)
                      ON CONFLICT (server_id, user_id)
-                     DO UPDATE SET rep=rep.rep + $3
+                     DO UPDATE SET rep=rep.rep + $3,
+                                   last_received = $4
                      '''
-            vals = [(guild.id, u.id, 1) for u in users]
+            vals = [(guild.id, u.id, 1, now) for u in users]
             await conn.executemany(sql, vals)
 
             self.bot.dispatch('rep_given', guild, users)
+
+            sql = '''INSERT INTO logger (server_id, user_id, channel_id, last_gave_rep)
+                     VALUES ($1, $2, $3, $4)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET last_gave_rep=$4
+                     '''
+            await conn.execute(sql, guild.id, author.id, message.channel.id, now)
 
         except Exception:
             log.error("Error when giving rep on message.", exc_info=True)
@@ -96,7 +103,6 @@ class Rep(commands.Cog):
         await message.reply(content=msg)
 
     # ________________________ Get XP _______________________
-
     @commands.Cog.listener(name='on_rep_received')
     async def on_rep_received(self, message: discord.Message, level: int) -> None:
         # Data builder
@@ -135,59 +141,55 @@ class Rep(commands.Cog):
         await message.channel.send(content=msg, delete_after=15)
 
     # ________________________ Get XP _______________________
-    # @rep_group.command(name='get')
-    # @app_commands.describe(member='Gets the rep data for a user.')
-    # async def display_xp(
-    #     self,
-    #     interaction: discord.Interaction,
-    #     member: Optional[discord.Member] = None
-    # ) -> None:
-    #     """ Get the rep information of a member or yourself. """
+    @rep_group.command(name='get')
+    @app_commands.describe(member='Gets the rep data for a user.')
+    async def display_rep(
+        self,
+        interaction: discord.Interaction,
+        member: Optional[discord.Member] = None
+    ) -> None:
+        """ Get the rep information of a member or yourself. """
 
-    #     # Defer
-    #     await interaction.response.defer()
+        # Defer
+        await interaction.response.defer()
 
-    #     # Validation
-    #     if not await self._get_xp_enabled(interaction.guild_id):
-    #         return await interaction.edit_original_message(content=NOT_ENABLED)
+        # Validation
+        if not await self._get_rep_enabled(interaction.guild_id):
+            return await interaction.edit_original_message(content=NOT_ENABLED)
 
-    #     member = member or interaction.user
-    #     conn = self.bot.pool
+        member = member or interaction.user
+        conn = self.bot.pool
 
-    #     try:
-    #         # Get xp info
-    #         sql = ''' SELECT * FROM xp
-    #                   INNER JOIN logger
-    #                   ON
-    #                     xp.server_id=logger.server_id
-    #                   AND
-    #                     xp.user_id=logger.user_id
-    #                   WHERE xp.server_id=$1 AND xp.user_id=$2
-    #         '''
-    #         res = await conn.fetchrow(sql, interaction.guild_id, member.id)
-    #     except Exception:
-    #         log.error("Error while getting xp data.", exc_info=True)
+        try:
+            # Get xp info
+            sql = ''' SELECT * FROM rep
+                      INNER JOIN logger
+                      ON
+                        rep.server_id=logger.server_id
+                      AND
+                        rep.user_id=logger.user_id
+                      WHERE rep.server_id=$1 AND rep.user_id=$2
+            '''
+            res = await conn.fetchrow(sql, interaction.guild_id, member.id)
+        except Exception:
+            log.error("Error while getting rep data.", exc_info=True)
+            return
 
-    #     # Build message
-    #     xp: int = res['xp'] if res is not None else 0
-    #     level: int = res['level'] if res is not None else 0
-    #     next_level_xp: int = self._calc_xp(level)
-    #     needed_xp: int = next_level_xp - xp
-    #     num_msgs: int = res['msg_count'] if res is not None else 0
+        # Build message
+        rep: int = res['rep'] if res is not None else 0
+        last_gave: str = format_dt(
+            res['last_gave_rep'], 'R') if res is not None else 'Never'
+        last_received: str = format_dt(
+            res['last_received'], 'R') if res is not None else 'Never'
 
-    #     msg = f'''You are level {level}, with {xp} xp.
-    #     Level {level + 1} requires a total of {next_level_xp}: You need {needed_xp} more xp.
-    #     '''
+        e = discord.Embed(title=member.display_name,
+                          color=discord.Color.random())
+        e.set_thumbnail(url=member.display_avatar.url)
+        e.add_field(name='Rep', value=f'`{rep}`', inline=False)
+        e.add_field(name='Last Gave', value=last_gave, inline=True)
+        e.add_field(name='Last Received', value=last_received, inline=True)
 
-    #     e = discord.Embed(title=member.display_name,
-    #                       color=discord.Color.random())
-    #     e.description = msg
-    #     e.set_thumbnail(url=member.display_avatar.url)
-    #     e.add_field(name='XP', value=f'{xp}/{next_level_xp}', inline=True)
-    #     e.add_field(name='Level', value=level, inline=True)
-    #     e.add_field(name='Messages', value=num_msgs, inline=True)
-
-    #     await interaction.edit_original_message(embed=e)
+        await interaction.edit_original_message(embed=e)
 
     # # _______________________ Give XP  ______________________
     # @rep_group.command('give')
