@@ -279,8 +279,8 @@ class XP(commands.Cog):
         # Get data
         try:
             sql = '''SELECT 
-                     RANK () OVER (
-                         ORDER BY xp DESC
+                     DENSE_RANK () OVER (
+                         ORDER BY xp DESC, last_xp ASC
                      ) rank, 
                      user_id, xp, level FROM xp 
                      WHERE server_id=$1

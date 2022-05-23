@@ -260,7 +260,12 @@ class Rep(commands.Cog):
             log.error("Error while getting rep data.", exc_info=True)
             return
 
-        await ctx.reply(f'{member.display_name} now has {rep} rep.')
+        await ctx.message.delete(delay=10)
+        await ctx.send(
+            content=f'{member.display_name} now has {rep} rep.',
+            reference=ctx.message.to_reference(),
+            delete_after=10
+        )
 
     # _____________________  XP Board  ______________________
     @rep_group.command(name='leaderboard')
@@ -280,8 +285,8 @@ class Rep(commands.Cog):
         # Get data
         try:
             sql = '''SELECT 
-                     RANK () OVER (
-                         ORDER BY rep DESC
+                     DENSE_RANK () OVER (
+                         ORDER BY rep DESC, last_received ASC
                      ) rank, 
                      user_id, rep FROM rep 
                      WHERE server_id=$1
