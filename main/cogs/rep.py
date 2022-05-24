@@ -335,7 +335,6 @@ class Rep(commands.Cog):
         p.embed.set_author(name=interaction.user.display_name)
         await p.start()
 
-    # _____________________ XP Enabled  _____________________
     # _____________________ XP Rewards  _____________________
     @rep_group.command(name='rewards')
     async def rewards(self, interaction: discord.Interaction) -> None:
@@ -374,7 +373,25 @@ class Rep(commands.Cog):
         p.embed.set_author(name=interaction.user.display_name)
         await p.start()
 
-    # _____________________ Get Last Message  _____________________
+    # _______________ Get Excluded Channels  __________________
+
+    @alru_cache(maxsize=128)
+    async def _get_excluded_channels(self, server_id: int) -> Optional[list[int]]:
+        # Get pool
+        conn = self.bot.pool
+
+        try:
+            sql = 'SELECT excluded_rep_channels FROM settings WHERE server_id=$1'
+            res = await conn.fetchrow(sql, server_id)
+
+            if res is not None:
+                return res['excluded_rep_channels']
+            else:
+                return None
+        except Exception:
+            log.error('Error while fetching excluded channels.', exc_info=True)
+            return None
+
     # _____________________ Rep Enabled  _____________________
     @alru_cache(maxsize=128)
     async def _get_rep_enabled(self, server_id: int) -> Optional[bool]:
@@ -392,6 +409,7 @@ class Rep(commands.Cog):
 
         except Exception:
             log.error('Error while checking enabled rep.', exc_info=True)
+            return None
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

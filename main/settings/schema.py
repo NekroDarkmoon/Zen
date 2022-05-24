@@ -10,6 +10,7 @@ tables: dict = {
         exception_role BIGINT DEFAULT NULL,
         enable_leveling BOOLEAN DEFAULT FALSE,
         enable_rep BOOLEAN DEFAULT FALSE,
+        excluded_rep_channels BIGINT ARRAY NOT NULL DEFAULT array[]::bigint[],
         enable_playchannels BOOLEAN DEFAULT FALSE,
         play_category BIGINT DEFAULT NULL,
         setup_completed BOOLEAN NOT NULL DEFAULT FALSE

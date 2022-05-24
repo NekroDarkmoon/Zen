@@ -153,7 +153,6 @@ class Settings(commands.Cog):
         await interaction.edit_original_message(content=msg)
 
     # _________________ Enable Reputation  _____________________
-
     @settings_group.command(name='enablerep')
     @app_commands.describe(choice='On or Off')
     async def enable_rep(self, interaction: discord.Interaction, choice: bool) -> None:
@@ -191,7 +190,65 @@ class Settings(commands.Cog):
 
         await interaction.edit_original_message(content=msg)
 
-     # ________________ Enable Playchannels  ___________________
+    # _____________ Exclude Channels Rep  _____________________
+    @commands.command(name='excluderep')
+    @commands.has_permissions(administrator=True)
+    async def exclude_rep(
+        self,
+        ctx: Context,
+        action: Literal['add', 'remove'],
+        channels: commands.Greedy[discord.TextChannel]
+    ) -> None:
+        """ Disable rep in certain channels
+
+        Usage: `excluderep [add | remove] "channel, channel, ..."`
+        """
+        # Data builder
+        conn = self.bot.pool
+        guild = ctx.guild
+        channels = set([c.id for c in channels])
+
+        # Check if exists
+        await self._check_existence(guild.id)
+
+        # Update db
+        try:
+            sql = '''SELECT excluded_rep_channels FROM settings WHERE server_id=$1'''
+            res = await conn.fetchrow(sql, guild.id)
+
+            if res is None:
+                log.error('Error while excluding channels.', exc_info=True)
+
+            existing_channels = set(res['excluded_rep_channels'])
+
+            if action == 'add':
+                channels = channels.union(existing_channels)
+            elif action == 'remove':
+                channels = existing_channels.difference(channels)
+            else:
+                return
+
+            sql = '''UPDATE settings 
+                     SET excluded_rep_channels=$2
+                     WHERE server_id=$1'''
+            await conn.execute(sql, guild.id, list(channels))
+
+            await ctx.reply('Updated Excluded Channels.')
+
+        except Exception:
+            log.error('Error while excluding channels.', exc_info=True)
+
+        # Update Cache
+        cog: Optional[Rep] = self.bot.get_cog('Rep')
+        if cog is not None:
+            cog._get_excluded_channels.cache_clear()
+        else:
+            log.error(f'Cog not found - {cog}.', exc_info=True)
+            return
+
+        return
+
+    # ________________ Enable Playchannels  ___________________
     @settings_group.command(name='enableplaychns')
     @app_commands.describe(choice='On or Off')
     async def enable_playchannels(self, interaction: discord.Interaction, choice: bool) -> None:
@@ -274,26 +331,7 @@ class Settings(commands.Cog):
         except Exception:
             log.error('Error while setting role reward.', exc_info=True)
 
-    # ____________________ Rep Enabled  _____________________
-    @alru_cache(maxsize=128)
-    async def _get_rep_enabled(self, server_id: int) -> Optional[bool]:
-        # Get pool
-        conn = self.bot.pool
-
-        try:
-            sql = 'SELECT enable_rep FROM settings WHERE server_id=$1'
-            res = await conn.fetchrow(sql, server_id)
-
-            if res is not None:
-                return res['enable_rep']
-            else:
-                return None
-
-        except Exception:
-            log.error('Error while checking enabled rep.', exc_info=True)
-
     # ________________ Check Guild Data  ___________________
-
     async def _check_existence(self, guild_id: int) -> None:
         # Check if exists
         conn = self.bot.pool
