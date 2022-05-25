@@ -220,7 +220,6 @@ class Settings(commands.Cog):
                 log.error('Error while excluding channels.', exc_info=True)
 
             existing_channels = set(res['excluded_rep_channels'])
-            print(existing_channels)
 
             if action == 'add':
                 channels = channels.union(existing_channels)

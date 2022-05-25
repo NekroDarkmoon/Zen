@@ -75,7 +75,7 @@ class Rep(commands.Cog):
         guild = message.guild
         author = message.author
         users = [u for u in message.mentions if u.id !=
-                 author.id and not u.bot]
+                 author.id]  # and not u.bot]
         now = datetime.now()
 
         if len(users) == 0:
@@ -91,7 +91,7 @@ class Rep(commands.Cog):
             vals = [(guild.id, u.id, 1, now) for u in users]
             await conn.executemany(sql, vals)
 
-            self.bot.dispatch('rep_given', guild, users)
+            self.bot.dispatch('rep_received', message, guild, users)
 
             sql = '''INSERT INTO logger (server_id, user_id, channel_id, last_gave_rep)
                      VALUES ($1, $2, $3, $4)
@@ -109,41 +109,56 @@ class Rep(commands.Cog):
 
     # ________________________ Get XP _______________________
     @commands.Cog.listener(name='on_rep_received')
-    async def on_rep_received(self, message: discord.Message, level: int) -> None:
+    async def on_rep_received(
+        self,
+        message: discord.Message,
+        guild: discord.Guild,
+        members: list[discord.Member]
+    ) -> None:
         # Data builder
         conn = self.bot.pool
-        member = message.author
-        guild = message.guild
         roles: list[discord.Role] = list()
 
-        msg = f'`{member.display_name} reached level {level}.`'
-        await message.channel.send(content=msg, delete_after=15)
-
         try:
-            sql = '''SELECT role_id FROM rewards 
-                     WHERE server_id=$1 AND type=$2 AND val<=$3'''
-            res: list[int] = await conn.fetch(sql, guild.id, SYSTEM, level)
+            sql = '''SELECT user_id, rep FROM rep
+                  WHERE server_id=$1 AND user_id=ANY($2::bigint[])'''
+            rows = await conn.fetch(sql, guild.id, [u.id for u in members])
+
+            # Data builder
+            mem_idx = [m.id for m in members]
+            max_rep = max([row['rep'] for row in rows])
+            rep_data: list[tuple[int, int]] = [
+                (row['user_id'], row['rep']) for row in rows]
+
+            sql = '''SELECT role_id, val FROM rewards
+                     WHERE server_id=$1 AND type=$2 and val<=$3'''
+            res = await conn.fetch(sql, guild.id, SYSTEM, max_rep)
 
             if len(res) == 0:
                 return
 
-            for entry in res:
-                if member.get_role(entry['role_id']) is None:
-                    roles.append(guild.get_role(entry['role_id']))
+            for user, rep in rep_data:
+                member = members[mem_idx.index(user)]
+                for entry in res:
+                    if entry['val'] <= rep and member.get_role(entry['role_id']) is None:
+                        roles.append(guild.get_role(entry['role_id']))
 
-            if len(roles) < 1:
-                return
+                if len(roles) < 1:
+                    continue
 
-            await member.add_roles(*roles)
+                await member.add_roles(*roles)
+
+                msg = f'`{member.display_name} gained the following roles(s): '
+                msg += f"{', '.join(role.name for role in roles)}`"
+
+                await message.channel.send(content=msg, delete_after=15)
+                roles.clear()
 
         except Exception:
-            log.error('Error while granting role rewards.', exc_info=True)
+            log.error('Error while fetching rep rewards.', exc_info=True)
             return
 
-        msg = f'`{member.display_name} gained the following role(s): '
-        msg += f"{', '.join(role.name for role in roles)}`"
-
-        await message.channel.send(content=msg, delete_after=15)
+        return
 
     # ________________________ Get XP _______________________
     @rep_group.command(name='get')
@@ -271,7 +286,7 @@ class Rep(commands.Cog):
         Usage: `setrep "username"/@mention/id rep_amt`
         """
         # Validation
-        if not await self._get_xp_enabled(ctx.guild.id):
+        if not await self._get_rep_enabled(ctx.guild.id):
             return await ctx.reply(content=NOT_ENABLED)
 
         # Data builder
