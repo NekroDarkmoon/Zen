@@ -275,6 +275,7 @@ class Rep(commands.Cog):
             log.error("Error while getting xp data.", exc_info=True)
             return
 
+        self.bot.dispatch('rep_received', interaction.message, guild, [member])
         await interaction.edit_original_message(content=f'{member.display_name} now has {new_rep} rep.')
 
     # ______________________ Set XP  ______________________
