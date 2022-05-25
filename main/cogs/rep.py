@@ -51,6 +51,11 @@ class Rep(commands.Cog):
         if not await self._get_rep_enabled(message.guild.id):
             return
 
+        # Check if forbidden channel
+        if message.channel.id in await self._get_excluded_channels(message.guild.id):
+            return
+
+        # Validation
         def check(msg):
             checks = [
                 r'(?<!no )(?<![A-z])th(a?n?(k|x)s?)(?![A-z])',

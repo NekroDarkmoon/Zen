@@ -196,12 +196,12 @@ class Settings(commands.Cog):
     async def exclude_rep(
         self,
         ctx: Context,
-        action: Literal['add', 'remove'],
+        action: Literal['add', 'remove', 'list'],
         channels: commands.Greedy[discord.TextChannel]
     ) -> None:
         """ Disable rep in certain channels
 
-        Usage: `excluderep [add | remove] "channel, channel, ..."`
+        Usage: `excluderep <add | remove | list> ["channel..."]`
         """
         # Data builder
         conn = self.bot.pool
@@ -220,11 +220,21 @@ class Settings(commands.Cog):
                 log.error('Error while excluding channels.', exc_info=True)
 
             existing_channels = set(res['excluded_rep_channels'])
+            print(existing_channels)
 
             if action == 'add':
                 channels = channels.union(existing_channels)
+
             elif action == 'remove':
                 channels = existing_channels.difference(channels)
+
+            elif action == 'list':
+                mentions = [self.bot.get_channel(
+                    c).mention for c in existing_channels]
+
+                msg = f"Rep can't be gained in the following channels: {', '.join( mentions)}"
+                return await ctx.reply(content=msg)
+
             else:
                 return
 
@@ -232,8 +242,6 @@ class Settings(commands.Cog):
                      SET excluded_rep_channels=$2
                      WHERE server_id=$1'''
             await conn.execute(sql, guild.id, list(channels))
-
-            await ctx.reply('Updated Excluded Channels.')
 
         except Exception:
             log.error('Error while excluding channels.', exc_info=True)
@@ -246,7 +254,7 @@ class Settings(commands.Cog):
             log.error(f'Cog not found - {cog}.', exc_info=True)
             return
 
-        return
+        return await ctx.reply('Updated Excluded Channels.')
 
     # ________________ Enable Playchannels  ___________________
     @settings_group.command(name='enableplaychns')
