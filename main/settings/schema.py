@@ -54,6 +54,8 @@ tables: dict = {
         server_id BIGINT NOT NULL,
         giver BIGINT NOT NULL,
         receiver BIGINT NOT NULL,
+        amount INT NOT NULL,
+        message_link TEXT NOT NULL,
         time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ''',
 

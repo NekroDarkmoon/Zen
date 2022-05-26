@@ -5,11 +5,12 @@ from __future__ import annotations
 
 # Standard library imports
 from datetime import datetime
+from email import message
 import logging
 import random
 import re
 
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Literal, Optional, TypedDict
 
 # Third party imports
 import discord  # noqa
@@ -19,7 +20,7 @@ from discord.ext import commands
 
 
 # Local application imports
-from main.cogs.utils.paginator import TabularPages
+from main.cogs.utils.paginator import TabularPages, SimplePages
 from main.cogs.utils.formats import format_dt
 
 if TYPE_CHECKING:
@@ -33,7 +34,40 @@ SYSTEM = 'rep'
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                          XP
+#                      Rep Log Pages
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class RepLogEntry(TypedDict):
+    time: str
+    giver: str
+    receiver: str
+    amount: int
+    link: str
+
+
+class RepLogEntry:
+    __slots__ = ('time', 'giver', 'receiver', 'amount', 'link')
+
+    def __init__(self, entry: RepLogEntry) -> None:
+        self.time = entry['time']
+        self.giver = entry['giver']
+        self.receiver = entry['recipient']
+        self.amount = entry['amount']
+        self.link = entry['link']
+
+    def __str__(self) -> str:
+        msg = f'[{self.time}]({self.link}): `{self.giver}` gave `{self.receiver}` `{self.amount}` rep.'
+
+        return msg
+
+
+class RepLogPages(SimplePages):
+    def __init__(self, entries: list[RepLogEntry], *, ctx: Context, per_page: int = 12):
+        converted = [RepLogEntry(entry) for entry in entries]
+        super().__init__(converted, ctx=ctx, per_page=per_page)
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                          Rep
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class Rep(commands.Cog):
     def __init__(self, bot: Zen) -> None:
@@ -101,7 +135,7 @@ class Rep(commands.Cog):
         msg = f'`Gave rep to {", ".join([u.display_name for u in users])}`'
         await message.reply(content=msg)
 
-        await self._log_rep(guild, channel, author, users, now)
+        await self._log_rep(guild, message, author, users, now)
 
     # ________________________ Rep Receive _______________________
     @commands.Cog.listener(name='on_rep_received')
@@ -197,7 +231,7 @@ class Rep(commands.Cog):
             log.error('Error while giving reaction rep', exc_info=True)
             return
 
-        return await self._log_rep(guild, channel, member, [author], now)
+        return await self._log_rep(guild, reaction.message, member, [author], now)
 
     # _____________________ On Reaction Remove _______________________
     @commands.Cog.listener(name='on_reaction_remove')
@@ -237,7 +271,6 @@ class Rep(commands.Cog):
 
             reactions = [
                 r for r in reaction.message.reactions if 'upvote' in r.__str__().lower()]
-            print(reactions)
 
             if len(reactions) == 0:
                 await reaction.message.remove_reaction(emoji='✅', member=self.bot.user)
@@ -246,7 +279,7 @@ class Rep(commands.Cog):
             log.error('Error while giving reaction rep', exc_info=True)
             return
 
-        return await self._log_rep(guild, channel, member, [author], now)
+        return await self._log_rep(guild, reaction.message, member, [author], now)
 
     # ________________________ Get XP _______________________
     @rep_group.command(name='get')
@@ -338,6 +371,7 @@ class Rep(commands.Cog):
         now = datetime.now()
         guild = interaction.guild
         author = interaction.user
+        message = await interaction.original_message()
 
         try:
             sql = '''SELECT * FROM rep WHERE server_id=$1 AND user_id=$2'''
@@ -359,7 +393,7 @@ class Rep(commands.Cog):
         self.bot.dispatch('rep_received', interaction.message, guild, [member])
         await interaction.edit_original_message(content=f'{member.display_name} now has `{new_rep}` rep.')
 
-        return await self._log_rep(guild, interaction.channel, author, [member], now)
+        return await self._log_rep(guild, message, author, [member], now, amount=rep)
 
     # ______________________ Set XP  ______________________
     @commands.command(name='setrep')
@@ -464,7 +498,6 @@ class Rep(commands.Cog):
             return
 
         # Convert to usable data
-
         data = [[guild.get_role(row['role_id']).name, row['val']]
                 for row in rows]
         headers = ['Role', 'Level']
@@ -477,17 +510,79 @@ class Rep(commands.Cog):
         p.embed.set_author(name=interaction.user.display_name)
         await p.start()
 
+    # ____________________ Display Log  ______________________
+    @rep_group.command(name='log')
+    @app_commands.describe(member='Gets the log for a user', link='Display Links')
+    async def display_log(
+        self,
+        interaction: discord.Interaction,
+        member: Optional[discord.Member],
+        link: Optional[bool]
+    ) -> None:
+        """ Displays the reputation log for the server."""
+        # Defer
+        await interaction.response.defer()
+
+        # Validation
+        if not await self._get_rep_enabled(interaction.guild_id):
+            return await interaction.edit_original_message(content=NOT_ENABLED)
+
+        # Data builder
+        guild = interaction.guild
+        conn = self.bot.pool
+
+        try:
+            if member is None:
+                sql = '''SELECT * FROM rep_log
+                         WHERE server_id=$1
+                         ORDER BY time DESC
+                    '''
+                rows = await conn.fetch(sql, guild.id)
+            else:
+                sql = '''SELECT * FROM rep_log
+                         WHERE server_id=$1 AND (giver=$2 OR receiver=$2)
+                         ORDER BY time DESC
+                      '''
+                rows = await conn.fetch(sql, guild.id, member.id)
+
+            if len(rows) == 0:
+                return await interaction.edit_original_message(content='`No rep found for this server`')
+
+        except Exception:
+            log.error('Error while getting rep log data.', exc_info=True)
+
+        # Get display ready
+        data = [{
+            'time': row['time'].strftime("%d %b %y %H:%M"),
+            'giver': (await self.bot.get_or_fetch_member(guild, row['giver'])).__str__(),
+            'recipient': (await self.bot.get_or_fetch_member(guild, row['receiver'])).__str__(),
+            'amount': row['amount'],
+            'link': row['message_link']
+        } for row in rows]
+
+        # Start Paginator
+        ctx = await commands.Context.from_interaction(interaction)
+
+        p = RepLogPages(entries=data, ctx=ctx)
+        p.embed.set_author(name=interaction.user.display_name)
+        await p.start()
+
+        return
+
     # ____________________ Log Rep  ______________________
     async def _log_rep(
         self,
         guild: discord.Guild,
-        channel: discord.TextChannel | discord.Thread,
+        message: discord.Message | discord.InteractionMessage,
         giver: discord.Member,
         receivers: list[discord.Member],
-        time: datetime
+        time: datetime,
+        amount: int = 1
     ) -> None:
         # Data builder
         conn = self.bot.pool
+        channel = message.channel
+        link = message.to_reference().jump_url
 
         try:
             # Add to regular logger
@@ -499,15 +594,19 @@ class Rep(commands.Cog):
             await conn.execute(sql, guild.id, giver.id, channel.id, time)
 
             # Add to rep logger
-            sql = '''INSERT INTO rep_log (server_id, giver, receiver, time)
-                    VALUES ($1, $2, $3, $4)
+            sql = '''INSERT INTO rep_log(
+                        server_id, giver, receiver, amount, message_link, time
+                        )
+                    VALUES ($1, $2, $3, $4, $5, $6)
                     '''
-            vals = [(guild.id, giver.id, r.id, time) for r in receivers]
+            vals = [(guild.id, giver.id, r.id, amount, link, time)
+                    for r in receivers]
             await conn.executemany(sql, vals)
 
         except Exception:
             log.error('Error while logging rep.', exc_info=True)
-        pass
+
+        return
 
     # _______________ Get Excluded Channels  __________________
     @alru_cache(maxsize=128)

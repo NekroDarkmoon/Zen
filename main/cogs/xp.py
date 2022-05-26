@@ -45,7 +45,6 @@ class XP(commands.Cog):
         name='xp', description='XP Commands.')
 
     # ______________________ Give XP _______________________
-
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         # Validation
@@ -97,7 +96,7 @@ class XP(commands.Cog):
             log.error("Error when giving rep on message.", exc_info=True)
 
     # ________________________ Get XP _______________________
-    @ commands.Cog.listener(name='on_xp_level_up')
+    @commands.Cog.listener(name='on_xp_level_up')
     async def on_xp_level_up(self, message: discord.Message, level: int) -> None:
         # Data builder
         conn = self.bot.pool
@@ -135,8 +134,8 @@ class XP(commands.Cog):
         await message.channel.send(content=msg, delete_after=15)
 
     # ________________________ Get XP _______________________
-    @ xp_group.command(name='get')
-    @ app_commands.describe(member='Gets the xp data for a user.')
+    @xp_group.command(name='get')
+    @app_commands.describe(member='Gets the xp data for a user.')
     async def display_xp(
         self,
         interaction: discord.Interaction,
@@ -190,8 +189,8 @@ class XP(commands.Cog):
         await interaction.edit_original_message(embed=e)
 
     # _______________________ Give XP  ______________________
-    @ commands.command(name='givexp')
-    @ commands.has_permissions(administrator=True)
+    @commands.command(name='givexp')
+    @commands.has_permissions(administrator=True)
     async def givexp(self, ctx: Context, member: discord.Member, xp: int) -> None:
         """Gives another member xp - Requires admin
 
@@ -346,7 +345,6 @@ class XP(commands.Cog):
         await p.start()
 
     # _______________________ Gen XP  _______________________
-
     def _gen_xp(self, msg: str) -> int:
         # TODO: Math it
 
@@ -373,7 +371,6 @@ class XP(commands.Cog):
         pass
 
     # _____________________ XP Enabled  _____________________
-
     @alru_cache(maxsize=128)
     async def _get_xp_enabled(self, server_id: int) -> Optional[bool]:
         # Get pool
