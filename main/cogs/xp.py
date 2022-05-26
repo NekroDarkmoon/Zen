@@ -19,7 +19,6 @@ from discord.ext import commands
 
 
 # Local application imports
-from main.cogs.utils.paginator import SimplePages
 from main.cogs.utils.paginator import TabularPages
 
 if TYPE_CHECKING:
