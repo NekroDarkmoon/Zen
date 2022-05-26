@@ -44,7 +44,7 @@ class Rep(commands.Cog):
     rep_group = app_commands.Group(
         name='rep', description='Rep Commands.')
 
-    # ______________________ Give Rep _______________________
+    # ______________________ On Message Rep _______________________
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         # Check if xp enabled
@@ -74,8 +74,9 @@ class Rep(commands.Cog):
         conn = self.bot.pool
         guild = message.guild
         author = message.author
+        channel = message.channel
         users = [u for u in message.mentions if u.id !=
-                 author.id]  # and not u.bot]
+                 author.id and not u.bot]
         now = datetime.now()
 
         if len(users) == 0:
@@ -93,13 +94,6 @@ class Rep(commands.Cog):
 
             self.bot.dispatch('rep_received', message, guild, users)
 
-            sql = '''INSERT INTO logger (server_id, user_id, channel_id, last_gave_rep)
-                     VALUES ($1, $2, $3, $4)
-                     ON CONFLICT (server_id, user_id)
-                     DO UPDATE SET last_gave_rep=$4
-                     '''
-            await conn.execute(sql, guild.id, author.id, message.channel.id, now)
-
         except Exception:
             log.error("Error when giving rep on message.", exc_info=True)
             return
@@ -107,7 +101,9 @@ class Rep(commands.Cog):
         msg = f'`Gave rep to {", ".join([u.display_name for u in users])}`'
         await message.reply(content=msg)
 
-    # ________________________ Get XP _______________________
+        await self._log_rep(guild, channel, author, users, now)
+
+    # ________________________ Rep Receive _______________________
     @commands.Cog.listener(name='on_rep_received')
     async def on_rep_received(
         self,
@@ -160,6 +156,98 @@ class Rep(commands.Cog):
 
         return
 
+    # _____________________ On Reaction Add _______________________
+    @commands.Cog.listener(name='on_reaction_add')
+    async def on_reaction_add(
+        self,
+        reaction: discord.Reaction,
+        member: discord.Member | discord.User
+    ) -> None:
+        # Active Validation
+        if not await self._get_rep_enabled(reaction.message.guild.id):
+            return
+
+        # Data Builder
+        author = reaction.message.author
+        guild = reaction.message.guild
+        channel = reaction.message.channel
+        conn = self.bot.pool
+        now = datetime.now()
+
+        # Validation
+        if channel.id in await self._get_excluded_channels(guild.id) or author.bot:
+            return
+
+        if author.id == member.id and not member.guild_permissions.administrator:
+            return
+
+        if 'upvote' not in reaction.emoji.__str__().lower():
+            return
+
+        try:
+            sql = '''INSERT INTO rep (server_id, user_id, rep)
+                     VALUES($1, $2, $3)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET rep=rep.rep + $3,
+                                   last_received=$4'''
+            await conn.execute(sql, guild.id, author.id, 1, now)
+            await reaction.message.add_reaction('✅')
+
+        except Exception:
+            log.error('Error while giving reaction rep', exc_info=True)
+            return
+
+        return await self._log_rep(guild, channel, member, [author], now)
+
+    # _____________________ On Reaction Remove _______________________
+    @commands.Cog.listener(name='on_reaction_remove')
+    async def on_reaction_remove(
+        self,
+        reaction: discord.Reaction,
+        member: discord.Member | discord.User
+    ) -> None:
+        # Active Validation
+        if not await self._get_rep_enabled(reaction.message.guild.id):
+            return
+
+        # Data Builder
+        author = reaction.message.author
+        guild = reaction.message.guild
+        channel = reaction.message.channel
+        conn = self.bot.pool
+        now = datetime.now()
+
+        # Validation
+        if channel.id in await self._get_excluded_channels(guild.id) or author.bot:
+            return
+
+        if author.id == member.id and not member.guild_permissions.administrator:
+            return
+
+        if 'upvote' not in reaction.emoji.__str__().lower():
+            return
+
+        try:
+            sql = '''INSERT INTO rep (server_id, user_id, rep)
+                     VALUES($1, $2, $3)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET rep=rep.rep - $3,
+                                   last_received=$4'''
+            await conn.execute(sql, guild.id, author.id, 1, now)
+
+            reactions = [
+                r for r in reaction.message.reactions if 'upvote' in r.__str__().lower()]
+            print(reactions)
+
+            if len(reactions) == 0:
+                await reaction.message.remove_reaction(emoji='✅', member=self.bot.user)
+
+        except Exception:
+            log.error('Error while giving reaction rep', exc_info=True)
+            return
+
+        return await self._log_rep(guild, channel, member, [author], now)
+
     # ________________________ Get XP _______________________
     @rep_group.command(name='get')
     @app_commands.describe(member='Gets the rep data for a user.')
@@ -211,7 +299,7 @@ class Rep(commands.Cog):
 
         await interaction.edit_original_message(embed=e)
 
-    # # _______________________ Give XP  ______________________
+    # # _______________________ Give Rep  ______________________
     @rep_group.command(name='give')
     @app_commands.describe(member='User to give rep.', rep='Rep amount')
     async def giverep(
@@ -264,19 +352,14 @@ class Rep(commands.Cog):
                 '''
             await conn.execute(sql, guild.id, member.id, new_rep, now)
 
-            sql = '''INSERT INTO logger (server_id, user_id, channel_id, last_gave_rep)
-                     VALUES ($1, $2, $3, $4)
-                     ON CONFLICT (server_id, user_id)
-                     DO UPDATE SET last_gave_rep=$4
-                     '''
-            await conn.execute(sql, guild.id, author.id, interaction.channel_id, now)
-
         except Exception:
             log.error("Error while getting xp data.", exc_info=True)
             return
 
         self.bot.dispatch('rep_received', interaction.message, guild, [member])
-        await interaction.edit_original_message(content=f'{member.display_name} now has {new_rep} rep.')
+        await interaction.edit_original_message(content=f'{member.display_name} now has `{new_rep}` rep.')
+
+        return await self._log_rep(guild, interaction.channel, author, [member], now)
 
     # ______________________ Set XP  ______________________
     @commands.command(name='setrep')
@@ -394,8 +477,39 @@ class Rep(commands.Cog):
         p.embed.set_author(name=interaction.user.display_name)
         await p.start()
 
-    # _______________ Get Excluded Channels  __________________
+    # ____________________ Log Rep  ______________________
+    async def _log_rep(
+        self,
+        guild: discord.Guild,
+        channel: discord.TextChannel | discord.Thread,
+        giver: discord.Member,
+        receivers: list[discord.Member],
+        time: datetime
+    ) -> None:
+        # Data builder
+        conn = self.bot.pool
 
+        try:
+            # Add to regular logger
+            sql = '''INSERT INTO logger (server_id, user_id, channel_id, last_gave_rep)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (server_id, user_id)
+                    DO UPDATE SET last_gave_rep=$4
+                    '''
+            await conn.execute(sql, guild.id, giver.id, channel.id, time)
+
+            # Add to rep logger
+            sql = '''INSERT INTO rep_log (server_id, giver, receiver, time)
+                    VALUES ($1, $2, $3, $4)
+                    '''
+            vals = [(guild.id, giver.id, r.id, time) for r in receivers]
+            await conn.executemany(sql, vals)
+
+        except Exception:
+            log.error('Error while logging rep.', exc_info=True)
+        pass
+
+    # _______________ Get Excluded Channels  __________________
     @alru_cache(maxsize=128)
     async def _get_excluded_channels(self, server_id: int) -> Optional[list[int]]:
         # Get pool
