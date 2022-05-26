@@ -58,13 +58,24 @@ class Game(commands.Cog):
     # __________________ Game Enabled __________________
     @alru_cache(maxsize=128)
     async def _get_game_enabled(self, server_id: int) -> Optional[bool]:
-        pass
+        # Get pool
+        conn = self.bot.pool
+
+        try:
+            sql = 'SELECT enable_game FROM settings WHERE server_id=$1'
+            res = await conn.fetchrow(sql, server_id)
+
+            if res is not None:
+                return res['enable_game']
+            else:
+                return None
+
+        except Exception:
+            log.error('Error while checking enabled game.', exc_info=True)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 async def setup(bot: Zen):
     await bot.add_cog(Game(bot))
