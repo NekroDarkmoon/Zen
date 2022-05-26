@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 NOT_ENABLED = 'Error - System Not Enabled.'
+SYSTEM = 'game'
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -53,6 +54,11 @@ class Game(commands.Cog):
         description='Commands related to managing game events.',
         parent=game_group
     )
+
+    # __________________ Game Enabled __________________
+    @alru_cache(maxsize=128)
+    async def _get_game_enabled(self, server_id: int) -> Optional[bool]:
+        pass
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

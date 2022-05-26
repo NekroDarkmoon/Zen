@@ -12,7 +12,6 @@ import discord  # noqa
 
 from discord import app_commands
 from discord.ext import commands
-from async_lru import alru_cache
 
 # Local application imports
 
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
     from main.cogs.logging import Logging
     from main.cogs.xp import XP
     from main.cogs.rep import Rep
+    from main.cogs.game import Game
 
 
 log = logging.getLogger(__name__)
@@ -255,12 +255,43 @@ class Settings(commands.Cog):
 
         return await ctx.reply('Updated Excluded Channels.')
 
-    # ________________ Enable Playchannels  ___________________
-    @settings_group.command(name='enableplaychns')
+    # ________________ Enable Game System  ___________________
+    @settings_group.command(name='enablegame')
     @app_commands.describe(choice='On or Off')
-    async def enable_playchannels(self, interaction: discord.Interaction, choice: bool) -> None:
-        """Enable the play channel system for this guild."""
-        ...
+    async def enable_game(self, interaction: discord.Interaction, choice: bool) -> None:
+        """Enable the game system for this guild."""
+        # Defer
+        await interaction.response.defer()
+        conn = self.bot.pool
+
+        # Check if exists
+        await self._check_existence(interaction.guild_id)
+
+        # Update
+        try:
+            sql = '''UPDATE settings SET enable_game=$2
+                      WHERE server_id=$1'''
+            await conn.execute(sql, interaction.guild_id, choice)
+
+        except Exception:
+            log.error('Error while updating game settings.', exc_info=True)
+            return
+
+        # Update Cache
+        cog: Optional[Game] = self.bot.get_cog('Game')
+        if cog is not None:
+            cog._get_game_enabled.cache_clear()
+        else:
+            log.error(f'Cog not found - {cog}.', exc_info=True)
+            return
+
+        # Send Update
+        if choice:
+            msg = 'Game system is now enabled'
+        else:
+            msg = 'Game system is now disabled.'
+
+        await interaction.edit_original_message(content=msg)
 
     role_rewards_group = app_commands.Group(
         name='rewards',
@@ -269,7 +300,6 @@ class Settings(commands.Cog):
     )
 
     # ____________________ Create Reward  _____________________
-
     @role_rewards_group.command(name='set')
     @app_commands.describe(
         system='Select the system for which the reward is awarded.',
@@ -305,7 +335,6 @@ class Settings(commands.Cog):
             log.error('Error while setting role reward.', exc_info=True)
 
     # ____________________ Remove Reward  _____________________
-
     @role_rewards_group.command(name='remove')
     @app_commands.describe(
         system='Select the system for the reward.',
