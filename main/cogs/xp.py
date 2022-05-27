@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 log = logging.getLogger(__name__)
-NOT_ENABLED = 'Error - System Not Enabled.'
+NOT_ENABLED = '`Error - System Not Enabled.`'
 SYSTEM = 'xp'
 
 

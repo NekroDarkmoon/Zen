@@ -2,6 +2,7 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
+from dis import disco
 
 # Standard library imports
 import logging
@@ -87,7 +88,7 @@ class Settings(commands.Cog):
         conn = self.bot.pool
 
         # Check if exists
-        await self._check_existence(interaction.guild_id)
+        await self._check_existence(interaction.guild)
 
         # Update
         try:
@@ -124,7 +125,7 @@ class Settings(commands.Cog):
         conn = self.bot.pool
 
         # Check if exists
-        await self._check_existence(interaction.guild_id)
+        await self._check_existence(interaction.guild)
 
         # Update
         try:
@@ -162,7 +163,7 @@ class Settings(commands.Cog):
         conn = self.bot.pool
 
         # Check if exists
-        await self._check_existence(interaction.guild_id)
+        await self._check_existence(interaction.guild)
 
         # Update
         try:
@@ -209,7 +210,7 @@ class Settings(commands.Cog):
         channels = set([c.id for c in channels])
 
         # Check if exists
-        await self._check_existence(guild.id)
+        await self._check_existence(guild)
 
         # Update db
         try:
@@ -258,20 +259,32 @@ class Settings(commands.Cog):
     # ________________ Enable Game System  ___________________
     @settings_group.command(name='enablegame')
     @app_commands.describe(choice='On or Off')
-    async def enable_game(self, interaction: discord.Interaction, choice: bool) -> None:
+    async def enable_game(
+        self,
+        interaction: discord.Interaction,
+        choice: bool,
+        category: discord.CategoryChannel,
+        max_channels: Optional[int]
+    ) -> None:
         """Enable the game system for this guild."""
         # Defer
         await interaction.response.defer()
         conn = self.bot.pool
 
         # Check if exists
-        await self._check_existence(interaction.guild_id)
+        await self._check_existence(interaction.guild)
 
         # Update
         try:
-            sql = '''UPDATE settings SET enable_game=$2
-                      WHERE server_id=$1'''
-            await conn.execute(sql, interaction.guild_id, choice)
+            sql = f'''UPDATE settings 
+                     SET enable_game=$2,
+                         game_category=$3
+                        {",game_channels_limit=$4" if max_channels is not None else ""}
+                     WHERE server_id=$1'''
+            if max_channels is None:
+                await conn.execute(sql, interaction.guild_id, choice, category.id)
+            else:
+                await conn.execute(sql, interaction.guild_id, choice, category.id, max_channels)
 
         except Exception:
             log.error('Error while updating game settings.', exc_info=True)
@@ -316,6 +329,9 @@ class Settings(commands.Cog):
         # Defer
         await interaction.response.defer()
 
+        # Check if exists
+        await self._check_existence(guild)
+
         # Data builder
         conn = self.bot.pool
         guild = interaction.guild
@@ -349,6 +365,9 @@ class Settings(commands.Cog):
         # Defer
         await interaction.response.defer()
 
+        # Check if exists
+        await self._check_existence(guild)
+
         # Data builder
         conn = self.bot.pool
         guild = interaction.guild
@@ -368,15 +387,15 @@ class Settings(commands.Cog):
             log.error('Error while setting role reward.', exc_info=True)
 
     # ________________ Check Guild Data  ___________________
-    async def _check_existence(self, guild_id: int) -> None:
+    async def _check_existence(self, guild: discord.Guild) -> None:
         # Check if exists
         conn = self.bot.pool
         try:
             sql = '''SELECT * FROM settings WHERE server_id=$1'''
-            res = await conn.fetchrow(sql, guild_id)
+            res = await conn.fetchrow(sql, guild.id)
 
             if res is None:
-                await create_settings_instance(conn, guild_id)
+                await create_settings_instance(conn, guild)
 
         except Exception:
             log.error('Database query error.', exc_info=True)

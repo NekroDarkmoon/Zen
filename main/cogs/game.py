@@ -6,6 +6,7 @@ from __future__ import annotations
 # Standard library imports
 from datetime import datetime
 import logging
+import re
 
 from typing import TYPE_CHECKING, Optional, TypedDict
 
@@ -26,14 +27,14 @@ if TYPE_CHECKING:
 
 
 log = logging.getLogger(__name__)
-NOT_ENABLED = 'Error - System Not Enabled.'
+NOT_ENABLED = '`Error - System Not Enabled.`'
 SYSTEM = 'game'
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                          Game
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-class multiMemberTransformer(app_commands.Transformer):
+class StringMemberTransformer(app_commands.Transformer):
     @classmethod
     async def transform(
             cls, interaction: discord.Interaction, value: str
@@ -87,8 +88,86 @@ class Game(commands.Cog):
         interaction: discord.Interaction,
         name: str
     ) -> None:
-        """ Creates a game channel """
-        pass
+        """Creates a game channel."""
+        # Defer
+        await interaction.response.defer()
+
+        # Validation
+        if not await self._get_game_enabled(interaction.guild_id):
+            return await interaction.edit_original_message(content=NOT_ENABLED)
+
+        # Data Builder
+        conn = self.bot.pool
+        guild = interaction.guild
+        member = interaction.user
+
+        # Get game category
+        try:
+            sql = '''SELECT game_category, game_channels_limit 
+                     FROM settings
+                     WHERE server_id=$1
+                    '''
+            res = await conn.fetchrow(sql, guild.id)
+
+            if res is None:
+                return await interaction.edit_original_message(content='Error.')
+
+        except Exception:
+            log.error('Error while getting category.', exc_info=True)
+            return
+
+        game_category: discord.CategoryChannel = guild.get_channel(
+            res['game_category'])
+        channel_limit: int = res['game_channels_limit']
+
+        try:
+            sql = '''SELECT channels FROM game_channels
+                     WHERE server_id=$1 AND user_id=$2'''
+            res = await conn.fetchrow(sql, guild.id, member.id)
+
+        except Exception:
+            log.error('Error while getting channels.', exc_info=True)
+            return await interaction.edit_original_message(content='Error')
+
+        channels: list[int] = res['channels'] if res is not None else []
+        if len(channels) >= channel_limit:
+            return await interaction.edit_original_message(
+                "You've reached the max limit of game channels that you can own.")
+
+        # Sanitize name
+        name = re.sub(r'[^0-9a-zA-Z ]+', '',
+                      name.lower().replace(' ', '-')[:20])
+
+        # Text Channel Perms
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            member: discord.PermissionOverwrite(
+                read_messages=True,
+                manage_messages=True,
+                manage_threads=True,
+                mention_everyone=False,
+            )
+        }
+
+        channel = await guild.create_text_channel(
+            name=name, overwrites=overwrites, category=game_category
+        )
+
+        channels.append(channel.id)
+
+        try:
+            sql = '''INSERT INTO game_channels(server_id, user_id, channels)
+                     VALUES($1, $2, $3)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET channels=$3'''
+            await conn.execute(sql, guild.id, member.id, channels)
+        except Exception:
+            log.error('Error while updating channels in db.', exc_info=True)
+            return
+
+        return await interaction.edit_original_message(
+            content=f'Successfully set up Play Channels. {channel.mention}'
+        )
 
     # __________________ Game Enabled __________________
     @channels_group.command(name='delete')
@@ -98,7 +177,7 @@ class Game(commands.Cog):
         interaction: discord.Interaction,
         name: str
     ) -> None:
-        """ Deletes a game channel """
+        """Deletes a game channel."""
         pass
 
     # __________________ Game Enabled __________________
@@ -108,16 +187,27 @@ class Game(commands.Cog):
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel,
-        users: app_commands.Transform[list[discord.Member], multiMemberTransformer],
+        users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
     ) -> None:
+        """Adds users to a game channel."""
         print(users)
 
         pass
 
     # __________________ Game Enabled __________________
-    # __________________ Game Enabled __________________
-    # __________________ Game Enabled __________________
+    @channels_group.command(name='remove')
+    @app_commands.describe(channel='Remove from channel.', users='List of users.')
+    async def remove_from_game_channel(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
+    ) -> None:
+        """Removes users from a game channel."""
+        pass
 
+    # __________________ Game Enabled __________________
+    # __________________ Game Enabled __________________
     events_group = app_commands.Group(
         name='event',
         description='Commands related to managing game events.',
