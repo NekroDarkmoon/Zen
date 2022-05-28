@@ -8,7 +8,7 @@ from datetime import datetime
 import logging
 import re
 
-from typing import TYPE_CHECKING, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, Optional, TypedDict
 
 # Third party imports
 import discord  # noqa
@@ -178,7 +178,31 @@ class Game(commands.Cog):
         name: str
     ) -> None:
         """Deletes a game channel."""
-        pass
+        await interaction.response.defer()
+
+        # Validation
+        if not await self._get_game_enabled(interaction.guild_id):
+            return await interaction.edit_original_message(content=NOT_ENABLED)
+
+        # Data Builder
+        conn = self.bot.pool
+        guild = interaction.guild
+        member = interaction.user
+
+        # Get game category
+        try:
+            sql = '''SELECT game_category, game_channels_limit 
+                     FROM settings
+                     WHERE server_id=$1
+                    '''
+            res = await conn.fetchrow(sql, guild.id)
+
+            if res is None:
+                return await interaction.edit_original_message(content='Error.')
+
+        except Exception:
+            log.error('Error while getting category.', exc_info=True)
+            return
 
     # __________________ Game Enabled __________________
     @channels_group.command(name='add')
@@ -218,6 +242,21 @@ class Game(commands.Cog):
     # __________________ Game Enabled __________________
     # __________________ Game Enabled __________________
     # __________________ Game Enabled __________________
+    async def _get_game_settings(self, server_id: int) -> dict[str: Any]:
+        try:
+            conn = self.bot.pool
+            sql = '''SELECT game_category, game_channels_limit FROM settings
+                     WHERE server_id=$1'''
+            res = await conn.fetchrow(sql, server_id)
+
+            return res
+
+        except Exception:
+            log.error('Error while getting game settings.', exc_info=True)
+            return
+
+        pass
+
     # __________________ Game Enabled __________________
     @alru_cache(maxsize=128)
     async def _get_game_enabled(self, server_id: int) -> Optional[bool]:
