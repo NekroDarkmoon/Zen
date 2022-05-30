@@ -71,12 +71,15 @@ class Game(commands.Cog):
     @commands.hybrid_group(invoke_without_command=True)
     async def game(self, ctx: Context) -> None:
         """ Commands related to running a game on the server. """
-        pass
+
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help('game')
 
     @game.group()
     async def channels(self, ctx: Context) -> None:
         """ Commands related to managing game channels """
-        pass
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help('game channels')
 
     # _________________ Create Channel _________________
     @channels.command('create')
