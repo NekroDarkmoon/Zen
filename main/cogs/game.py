@@ -105,22 +105,13 @@ class Game(commands.Cog):
         # Get game category
         game_category, channel_limit = await self._get_game_settings(guild)
 
-        try:
-            sql = '''SELECT channels FROM game_channels
-                     WHERE server_id=$1 AND user_id=$2'''
-            res = await conn.fetchrow(sql, guild.id, member.id)
-
-        except Exception:
-            log.error('Error while getting channels.', exc_info=True)
-            return await interaction.edit_original_message(content='Error')
-
-        channels: set[int] = set(res['channels']) if res is not None else set()
+        channels = await self._get_game_channels(guild, member)
         if len(channels) >= channel_limit:
             return await interaction.edit_original_message(
                 "You've reached the max limit of game channels that you can own.")
 
         # Sanitize name
-        name = re.sub(r'[^0-9a-zA-Z ]+', '',
+        name = re.sub(r'[^0-9a-zA-Z]+', '',
                       name.lower().replace(' ', '-')[:20])
 
         # Text Channel Perms
@@ -154,7 +145,7 @@ class Game(commands.Cog):
             content=f'Successfully set up game channel - {channel.mention}'
         )
 
-    # __________________ Game Enabled __________________
+    # __________________ Delete Channel __________________
     @channels_group.command(name='delete')
     @app_commands.describe(channel='Name of the channel.')
     async def delete_game_channel(
@@ -180,15 +171,10 @@ class Game(commands.Cog):
         category, _ = await self._get_game_settings(guild)
 
         # Get channels
-        try:
-            sql = '''SELECT channels FROM game_channels
-                     WHERE server_id=$1 AND user_id=$2'''
-            res = await conn.fetchrow(sql, guild.id, member.id)
-        except Exception:
-            log.error('Error while getting channels.', exc_info=True)
-            return await interaction.edit_original_message(content='Error')
-
-        channels: set[int] = set(res['channels']) if res is not None else set()
+        if is_admin or is_moderator:
+            channels = await self._get_game_channels(guild)
+        else:
+            channels = await self._get_game_channels(guild, member)
 
         # Sanity check
         if category.id != channel.category_id:
@@ -215,7 +201,7 @@ class Game(commands.Cog):
             log.error('Error while updating channels.', exc_info=True)
             return await interaction.edit_original_message(content='Error')
 
-        msg = f'Successfully deleted ${channel.name}.'
+        msg = f'Successfully deleted {channel.name}.'
         await interaction.edit_original_message(content=msg)
         await channel.delete()
 
@@ -256,15 +242,10 @@ class Game(commands.Cog):
             )
 
         # Get channels
-        try:
-            sql = '''SELECT channels FROM game_channels
-                     WHERE server_id=$1 AND user_id=$2'''
-            res = await conn.fetchrow(sql, guild.id, member.id)
-        except Exception:
-            log.error('Error while getting channels.', exc_info=True)
-            return await interaction.edit_original_message(content='Error')
-
-        channels: set[int] = set(res['channels']) if res is not None else set()
+        if is_admin or is_moderator:
+            channels = await self._get_game_channels(guild)
+        else:
+            channels = await self._get_game_channels(guild, member)
 
         # Check if channel is owned or admin
         if channel.id not in channels and not (is_admin or is_moderator):
@@ -273,17 +254,8 @@ class Game(commands.Cog):
             )
 
         # Add users to channel
-        overwrites = channel.overwrites
-        new_overwrites = {
-            u: discord.PermissionOverwrite(
-                read_messages=True,
-                send_messages=True,
-            ) for u in users}
-
-        overwrites.update(new_overwrites)
-        print(overwrites)
-
-        await channel.set_permissions(permissions=overwrites)
+        for user in users:
+            await channel.set_permissions(user, read_messages=True, send_messages=True)
 
         msg = f"Added {', '.join([u.display_name for u in users])} to {channel.mention}"
 
@@ -320,19 +292,14 @@ class Game(commands.Cog):
         # Sanity check
         if category.id != channel.category_id:
             return await interaction.edit_original_message(
-                content='`Error: Channel is not part of game category.'
+                content='`Error: Channel is not part of game category.`'
             )
 
         # Get channels
-        try:
-            sql = '''SELECT channels FROM game_channels
-                     WHERE server_id=$1 AND user_id=$2'''
-            res = await conn.fetchrow(sql, guild.id, member.id)
-        except Exception:
-            log.error('Error while getting channels.', exc_info=True)
-            return await interaction.edit_original_message(content='Error')
-
-        channels: set[int] = set(res['channels']) if res is not None else set()
+        if is_admin or is_moderator:
+            channels = await self._get_game_channels(guild)
+        else:
+            channels = await self._get_game_channels(guild, member)
 
         # Check if channel is owned or admin
         if channel.id not in channels and not (is_admin or is_moderator):
@@ -341,14 +308,8 @@ class Game(commands.Cog):
             )
 
         # Remove users from channel
-        overwrites = channel.overwrites
-
-        for u in users:
-            overwrites.pop(u)
-
-        print(overwrites)
-
-        await channel.set_permissions(permissions=overwrites)
+        for user in users:
+            await channel.set_permissions(user, overwrite=None)
 
         msg = f"Removed {', '.join([u.display_name for u in users])} to {channel.mention}"
 
@@ -365,7 +326,35 @@ class Game(commands.Cog):
     # __________________ Game Enabled __________________
     # __________________ Game Enabled __________________
     # __________________ Game Enabled __________________
-    # __________________ Game Enabled __________________
+    async def _get_game_channels(
+        self, guild: discord.Guild, user: Optional[discord.Member] = None
+    ) -> set[int]:
+        try:
+            conn = self.bot.pool
+
+            if user is None:
+                sql = '''SELECT array_agg(channels) channels FROM (
+                            SELECT unnest(channels) channels
+                            FROM game_channels
+                            WHERE server_id=$1
+                         ) as expand'''
+                res = await conn.fetchrow(sql, guild.id)
+
+                return set(res['channels']) if res is not None else set()
+
+            else:
+                sql = '''SELECT channels FROM game_channels
+                         WHERE server_id=$1 AND user_id=$2'''
+                res = await conn.fetchrow(sql, guild.id, user.id)
+
+                return set(res['channels']) if res is not None else set()
+
+        except Exception:
+            log.error('Error while getting channels.', exc_info=True)
+
+        return set()
+
+    # __________________ Game Settings __________________
     async def _get_game_settings(
         self, guild: discord.Guild
     ) -> tuple[discord.CategoryChannel, int]:
