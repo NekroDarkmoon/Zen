@@ -50,7 +50,6 @@ class Owner(commands.Cog):
 
     def cleanup_code(self, content: str) -> str:
         """Automatically removes code blocks from the code."""
-        # remove ```py\n```
         if content.startswith('```') and content.endswith('```'):
             return '\n'.join(content.split('\n')[1:-1])
 

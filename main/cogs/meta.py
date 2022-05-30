@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 # Standard library imports
-import aiohttp
 import datetime
 import logging
 import inspect
@@ -34,6 +33,8 @@ if TYPE_CHECKING:
     from utils.context import Context
 
 GuildChannel = discord.TextChannel | discord.VoiceChannel | discord.StageChannel | discord.CategoryChannel | discord.Thread
+
+log = logging.getLogger('__name__')
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -337,10 +338,9 @@ class Meta(commands.Cog):
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 async def setup(bot: Zen) -> None:
     await bot.add_cog(Meta(bot))

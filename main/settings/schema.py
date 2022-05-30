@@ -14,6 +14,7 @@ tables: dict = {
         enable_game BOOLEAN DEFAULT FALSE,
         game_category BIGINT DEFAULT NULL,
         game_channels_limit INT DEFAULT 0,
+        hashtags BIGINT ARRAY NOT NULL DEFAULT array[]::bigint[],
         setup_completed BOOLEAN NOT NULL DEFAULT FALSE
     ''',
 
