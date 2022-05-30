@@ -9,6 +9,7 @@ import logging
 import re
 
 from typing import TYPE_CHECKING, Any, Optional, TypedDict
+from unicodedata import category
 
 # Third party imports
 import discord  # noqa
@@ -201,12 +202,26 @@ class Game(commands.Cog):
                 content="`Error: This channel doesn't belong to you.`"
             )
 
-        await channel.delete()
+        channels.remove(channel.id)
+
+        # Update db
+        try:
+            sql = '''INSERT INTO game_channels(server_id, user_id, channels)
+                     VALUES($1, $2, $3)
+                     ON CONFLICT (server_id, user_id)
+                     DO UPDATE SET channels=$3'''
+            await conn.execute(sql, guild.id, member.id, list(channels))
+        except Exception:
+            log.error('Error while updating channels.', exc_info=True)
+            return await interaction.edit_original_message(content='Error')
 
         msg = f'Successfully deleted ${channel.name}.'
-        return await interaction.edit_original_message(content=msg)
+        await interaction.edit_original_message(content=msg)
+        await channel.delete()
 
-    # __________________ Game Enabled __________________
+        return
+
+    # __________________ Add Users to Game Channel __________________
     @channels_group.command(name='add')
     @app_commands.describe(channel='Add to channel.', users='List of users.')
     async def add_to_game_channel(
@@ -216,11 +231,65 @@ class Game(commands.Cog):
         users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
     ) -> None:
         """Adds users to a game channel."""
-        print(users)
 
-        pass
+        # Defer Response
+        await interaction.response.defer()
 
-    # __________________ Game Enabled __________________
+        # Validation
+        if not await self._get_game_enabled(interaction.guild_id):
+            return await interaction.edit_original_message(content=NOT_ENABLED)
+
+        # Data Builder
+        conn = self.bot.pool
+        guild = interaction.guild
+        member = interaction.user
+        is_admin = member.guild_permissions.administrator
+        is_moderator = member.guild_permissions.moderate_members
+
+        # Get Category
+        category, _ = await self._get_game_settings(guild)
+
+        # Sanity check
+        if category.id != channel.category_id:
+            return await interaction.edit_original_message(
+                content='`Error: Channel is not part of game category.'
+            )
+
+        # Get channels
+        try:
+            sql = '''SELECT channels FROM game_channels
+                     WHERE server_id=$1 AND user_id=$2'''
+            res = await conn.fetchrow(sql, guild.id, member.id)
+        except Exception:
+            log.error('Error while getting channels.', exc_info=True)
+            return await interaction.edit_original_message(content='Error')
+
+        channels: set[int] = set(res['channels']) if res is not None else set()
+
+        # Check if channel is owned or admin
+        if channel.id not in channels and not (is_admin or is_moderator):
+            return await interaction.edit_original_message(
+                content="`Error: This channel doesn't belong to you.`"
+            )
+
+        # Add users to channel
+        overwrites = channel.overwrites
+        new_overwrites = {
+            u: discord.PermissionOverwrite(
+                read_messages=True,
+                send_messages=True,
+            ) for u in users}
+
+        overwrites.update(new_overwrites)
+        print(overwrites)
+
+        await channel.set_permissions(permissions=overwrites)
+
+        msg = f"Added {', '.join([u.display_name for u in users])} to {channel.mention}"
+
+        return await interaction.edit_original_message(content=msg)
+
+    # __________________ Remove Users from Game Channel __________________
     @channels_group.command(name='remove')
     @app_commands.describe(channel='Remove from channel.', users='List of users.')
     async def remove_from_game_channel(
@@ -230,7 +299,60 @@ class Game(commands.Cog):
         users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
     ) -> None:
         """Removes users from a game channel."""
-        pass
+
+        # Defer Response
+        await interaction.response.defer()
+
+        # Validation
+        if not await self._get_game_enabled(interaction.guild_id):
+            return await interaction.edit_original_message(content=NOT_ENABLED)
+
+        # Data Builder
+        conn = self.bot.pool
+        guild = interaction.guild
+        member = interaction.user
+        is_admin = member.guild_permissions.administrator
+        is_moderator = member.guild_permissions.moderate_members
+
+        # Get Category
+        category, _ = await self._get_game_settings(guild)
+
+        # Sanity check
+        if category.id != channel.category_id:
+            return await interaction.edit_original_message(
+                content='`Error: Channel is not part of game category.'
+            )
+
+        # Get channels
+        try:
+            sql = '''SELECT channels FROM game_channels
+                     WHERE server_id=$1 AND user_id=$2'''
+            res = await conn.fetchrow(sql, guild.id, member.id)
+        except Exception:
+            log.error('Error while getting channels.', exc_info=True)
+            return await interaction.edit_original_message(content='Error')
+
+        channels: set[int] = set(res['channels']) if res is not None else set()
+
+        # Check if channel is owned or admin
+        if channel.id not in channels and not (is_admin or is_moderator):
+            return await interaction.edit_original_message(
+                content="`Error: This channel doesn't belong to you.`"
+            )
+
+        # Remove users from channel
+        overwrites = channel.overwrites
+
+        for u in users:
+            overwrites.pop(u)
+
+        print(overwrites)
+
+        await channel.set_permissions(permissions=overwrites)
+
+        msg = f"Removed {', '.join([u.display_name for u in users])} to {channel.mention}"
+
+        return await interaction.edit_original_message(content=msg)
 
     # __________________ Game Enabled __________________
     # __________________ Game Enabled __________________
