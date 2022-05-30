@@ -68,47 +68,43 @@ class Game(commands.Cog):
 
     # --------------------------------------------------
     #               App Commands Settings
-    game_group = app_commands.Group(
-        name='game', description='Commands related to running a game on the server.')
+    @commands.hybrid_group(invoke_without_command=True)
+    async def game(self, ctx: Context) -> None:
+        """ Commands related to running a game on the server. """
+        pass
 
-    # __________________ Game Enabled __________________
-    # __________________ Game Enabled __________________
-    # __________________ Game Enabled __________________
-
-    channels_group = app_commands.Group(
-        name='channel',
-        description='Commands related to managing game channels.',
-        parent=game_group
-    )
+    @game.group()
+    async def channels(self, ctx: Context) -> None:
+        """ Commands related to managing game channels """
+        pass
 
     # _________________ Create Channel _________________
-    @channels_group.command(name='create')
+    @channels.command('create')
     @app_commands.describe(name="Name of the channel.")
     async def create_game_channel(
         self,
-        interaction: discord.Interaction,
+        ctx: Context,
         name: str
     ) -> None:
         """Creates a game channel."""
         # Defer
-        await interaction.response.defer()
+        await ctx.typing()
 
         # Validation
-        if not await self._get_game_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+        if not await self._get_game_enabled(ctx.guild.id):
+            return await ctx.reply(content=NOT_ENABLED)
 
         # Data Builder
         conn = self.bot.pool
-        guild = interaction.guild
-        member = interaction.user
+        guild = ctx.guild
+        member = ctx.author
 
         # Get game category
         game_category, channel_limit = await self._get_game_settings(guild)
 
         channels = await self._get_game_channels(guild, member)
         if len(channels) >= channel_limit:
-            return await interaction.edit_original_message(
-                "You've reached the max limit of game channels that you can own.")
+            return await ctx.reply("You've reached the max limit of game channels that you can own.")
 
         # Sanitize name
         name = re.sub(r'[^0-9a-zA-Z]+', '',
@@ -141,29 +137,30 @@ class Game(commands.Cog):
             log.error('Error while updating channels in db.', exc_info=True)
             return
 
-        return await interaction.edit_original_message(
-            content=f'Successfully set up game channel - {channel.mention}'
-        )
+        # Clear cache
+        self._get_game_channels.cache_clear()
 
-    # __________________ Delete Channel __________________
-    @channels_group.command(name='delete')
+        return await ctx.reply(content=f'Successfully set up game channel - {channel.mention}')
+
+    # # __________________ Delete Channel __________________
+    @channels.command(name='delete')
     @app_commands.describe(channel='Name of the channel.')
     async def delete_game_channel(
         self,
-        interaction: discord.Interaction,
+        ctx: Context,
         channel: discord.TextChannel
     ) -> None:
         """Deletes a game channel."""
-        await interaction.response.defer()
+        await ctx.typing()
 
         # Validation
-        if not await self._get_game_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+        if not await self._get_game_enabled(ctx.guild.id):
+            return await ctx.reply(content=NOT_ENABLED)
 
         # Data Builder
         conn = self.bot.pool
-        guild = interaction.guild
-        member = interaction.user
+        guild = ctx.guild
+        member = ctx.author
         is_admin = member.guild_permissions.administrator
         is_moderator = member.guild_permissions.moderate_members
 
@@ -178,15 +175,11 @@ class Game(commands.Cog):
 
         # Sanity check
         if category.id != channel.category_id:
-            return await interaction.edit_original_message(
-                content='`Error: Channel is not part of game category.`'
-            )
+            return await ctx.reply(content='`Error: Channel is not part of game category.`')
 
         # Check if channel is owned or admin
         if channel.id not in channels and not (is_admin or is_moderator):
-            return await interaction.edit_original_message(
-                content="`Error: This channel doesn't belong to you.`"
-            )
+            return await ctx.reply(content="`Error: This channel doesn't belong to you.`")
 
         channels.remove(channel.id)
 
@@ -199,36 +192,40 @@ class Game(commands.Cog):
             await conn.execute(sql, guild.id, member.id, list(channels))
         except Exception:
             log.error('Error while updating channels.', exc_info=True)
-            return await interaction.edit_original_message(content='Error')
+            return await ctx.reply(content='Error')
 
         msg = f'Successfully deleted {channel.name}.'
-        await interaction.edit_original_message(content=msg)
+        await ctx.reply(content=msg)
         await channel.delete()
+
+        # Update cache
+        self._get_game_channels.cache_clear()
 
         return
 
     # __________________ Add Users to Game Channel __________________
-    @channels_group.command(name='add')
+    @channels.command(name='add')
     @app_commands.describe(channel='Add to channel.', users='List of users.')
     async def add_to_game_channel(
         self,
-        interaction: discord.Interaction,
+        ctx: Context,
         channel: discord.TextChannel,
-        users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
+        users: commands.Greedy[discord.Member]
+        # users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
     ) -> None:
         """Adds users to a game channel."""
 
         # Defer Response
-        await interaction.response.defer()
+        await ctx.typing()
 
         # Validation
-        if not await self._get_game_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+        if not await self._get_game_enabled(ctx.guild.id):
+            return await ctx.reply(content=NOT_ENABLED)
 
         # Data Builder
         conn = self.bot.pool
-        guild = interaction.guild
-        member = interaction.user
+        guild = ctx.guild
+        member = ctx.author
         is_admin = member.guild_permissions.administrator
         is_moderator = member.guild_permissions.moderate_members
 
@@ -237,9 +234,7 @@ class Game(commands.Cog):
 
         # Sanity check
         if category.id != channel.category_id:
-            return await interaction.edit_original_message(
-                content='`Error: Channel is not part of game category.'
-            )
+            return await ctx.reply(content='`Error: Channel is not part of game category.')
 
         # Get channels
         if is_admin or is_moderator:
@@ -249,9 +244,7 @@ class Game(commands.Cog):
 
         # Check if channel is owned or admin
         if channel.id not in channels and not (is_admin or is_moderator):
-            return await interaction.edit_original_message(
-                content="`Error: This channel doesn't belong to you.`"
-            )
+            return await ctx.reply(content="`Error: This channel doesn't belong to you.`")
 
         # Add users to channel
         for user in users:
@@ -259,30 +252,31 @@ class Game(commands.Cog):
 
         msg = f"Added {', '.join([u.display_name for u in users])} to {channel.mention}"
 
-        return await interaction.edit_original_message(content=msg)
+        return await ctx.reply(content=msg)
 
     # __________________ Remove Users from Game Channel __________________
-    @channels_group.command(name='remove')
+    @channels.command(name='remove')
     @app_commands.describe(channel='Remove from channel.', users='List of users.')
     async def remove_from_game_channel(
         self,
-        interaction: discord.Interaction,
+        ctx: Context,
         channel: discord.TextChannel,
-        users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
+        users: commands.Greedy[discord.Member]
+        # users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
     ) -> None:
         """Removes users from a game channel."""
 
         # Defer Response
-        await interaction.response.defer()
+        await ctx.typing()
 
         # Validation
-        if not await self._get_game_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+        if not await self._get_game_enabled(ctx.guild.id):
+            return await ctx.reply(content=NOT_ENABLED)
 
         # Data Builder
         conn = self.bot.pool
-        guild = interaction.guild
-        member = interaction.user
+        guild = ctx.guild
+        member = ctx.author
         is_admin = member.guild_permissions.administrator
         is_moderator = member.guild_permissions.moderate_members
 
@@ -291,9 +285,7 @@ class Game(commands.Cog):
 
         # Sanity check
         if category.id != channel.category_id:
-            return await interaction.edit_original_message(
-                content='`Error: Channel is not part of game category.`'
-            )
+            return await ctx.reply(content='`Error: Channel is not part of game category.`')
 
         # Get channels
         if is_admin or is_moderator:
@@ -303,9 +295,7 @@ class Game(commands.Cog):
 
         # Check if channel is owned or admin
         if channel.id not in channels and not (is_admin or is_moderator):
-            return await interaction.edit_original_message(
-                content="`Error: This channel doesn't belong to you.`"
-            )
+            return await ctx.reply(content="`Error: This channel doesn't belong to you.`")
 
         # Remove users from channel
         for user in users:
@@ -313,15 +303,15 @@ class Game(commands.Cog):
 
         msg = f"Removed {', '.join([u.display_name for u in users])} to {channel.mention}"
 
-        return await interaction.edit_original_message(content=msg)
+        return await ctx.reply(content=msg)
 
-    # __________________ Game Enabled __________________
-    # __________________ Game Enabled __________________
-    events_group = app_commands.Group(
-        name='event',
-        description='Commands related to managing game events.',
-        parent=game_group
-    )
+    # # __________________ Game Enabled __________________
+    # # __________________ Game Enabled __________________
+    # events_group = app_commands.Group(
+    #     name='event',
+    #     description='Commands related to managing game events.',
+    #     parent=game_group
+    # )
 
     # __________________ Game Enabled __________________
     # __________________ Game Enabled __________________
