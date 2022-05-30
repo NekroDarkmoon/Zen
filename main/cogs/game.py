@@ -106,6 +106,7 @@ class Game(commands.Cog):
         game_category, channel_limit = await self._get_game_settings(guild)
 
         channels = await self._get_game_channels(guild, member)
+        print(f'{len(channels)} / {channel_limit}')
         if len(channels) >= channel_limit:
             return await ctx.reply("You've reached the max limit of game channels that you can own.")
 
@@ -139,9 +140,6 @@ class Game(commands.Cog):
         except Exception:
             log.error('Error while updating channels in db.', exc_info=True)
             return
-
-        # Clear cache
-        self._get_game_channels.cache_clear()
 
         return await ctx.reply(content=f'Successfully set up game channel - {channel.mention}')
 
@@ -188,11 +186,21 @@ class Game(commands.Cog):
 
         # Update db
         try:
+            sql = '''SELECT user_id FROM game_channels
+                     WHERE server_id=$1 AND $2=ANY(channels)'''
+
+            res = await conn.fetchrow(sql, guild.id, channel.id)
+
+            if res is None:
+                pass
+            else:
+                user_id = res['user_id']
+
             sql = '''INSERT INTO game_channels(server_id, user_id, channels)
                      VALUES($1, $2, $3)
                      ON CONFLICT (server_id, user_id)
                      DO UPDATE SET channels=$3'''
-            await conn.execute(sql, guild.id, member.id, list(channels))
+            await conn.execute(sql, guild.id, user_id, list(channels))
         except Exception:
             log.error('Error while updating channels.', exc_info=True)
             return await ctx.reply(content='Error')
@@ -200,9 +208,6 @@ class Game(commands.Cog):
         msg = f'Successfully deleted {channel.name}.'
         await ctx.reply(content=msg)
         await channel.delete()
-
-        # Update cache
-        self._get_game_channels.cache_clear()
 
         return
 

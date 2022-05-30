@@ -259,8 +259,6 @@ class PaginatedHelpCommand(commands.HelpCommand):
             all_commands[cog] = sorted(
                 children, key=lambda c: c.qualified_name)
 
-        print(all_commands)
-
         menu = HelpMenu(FrontPageSource(), ctx=self.context)
         menu.add_categories(all_commands)
         await self.context.release()
