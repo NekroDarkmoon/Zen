@@ -102,23 +102,7 @@ class Game(commands.Cog):
         member = interaction.user
 
         # Get game category
-        try:
-            sql = '''SELECT game_category, game_channels_limit 
-                     FROM settings
-                     WHERE server_id=$1
-                    '''
-            res = await conn.fetchrow(sql, guild.id)
-
-            if res is None:
-                return await interaction.edit_original_message(content='Error.')
-
-        except Exception:
-            log.error('Error while getting category.', exc_info=True)
-            return
-
-        game_category: discord.CategoryChannel = guild.get_channel(
-            res['game_category'])
-        channel_limit: int = res['game_channels_limit']
+        game_category, channel_limit = await self._get_game_settings(guild)
 
         try:
             sql = '''SELECT channels FROM game_channels
@@ -129,7 +113,7 @@ class Game(commands.Cog):
             log.error('Error while getting channels.', exc_info=True)
             return await interaction.edit_original_message(content='Error')
 
-        channels: list[int] = res['channels'] if res is not None else []
+        channels: set[int] = set(res['channels']) if res is not None else set()
         if len(channels) >= channel_limit:
             return await interaction.edit_original_message(
                 "You've reached the max limit of game channels that you can own.")
@@ -153,14 +137,14 @@ class Game(commands.Cog):
             name=name, overwrites=overwrites, category=game_category
         )
 
-        channels.append(channel.id)
+        channels.add(channel.id)
 
         try:
             sql = '''INSERT INTO game_channels(server_id, user_id, channels)
                      VALUES($1, $2, $3)
                      ON CONFLICT (server_id, user_id)
                      DO UPDATE SET channels=$3'''
-            await conn.execute(sql, guild.id, member.id, channels)
+            await conn.execute(sql, guild.id, member.id, list(channels))
         except Exception:
             log.error('Error while updating channels in db.', exc_info=True)
             return
@@ -171,11 +155,11 @@ class Game(commands.Cog):
 
     # __________________ Game Enabled __________________
     @channels_group.command(name='delete')
-    @app_commands.describe(name='Name of the channel.')
+    @app_commands.describe(channel='Name of the channel.')
     async def delete_game_channel(
         self,
         interaction: discord.Interaction,
-        name: str
+        channel: discord.TextChannel
     ) -> None:
         """Deletes a game channel."""
         await interaction.response.defer()
@@ -188,21 +172,39 @@ class Game(commands.Cog):
         conn = self.bot.pool
         guild = interaction.guild
         member = interaction.user
+        is_admin = member.guild_permissions.administrator
+        is_moderator = member.guild_permissions.moderate_members
 
         # Get game category
+        category, _ = await self._get_game_settings(guild)
+
+        # Get channels
         try:
-            sql = '''SELECT game_category, game_channels_limit 
-                     FROM settings
-                     WHERE server_id=$1
-                    '''
-            res = await conn.fetchrow(sql, guild.id)
-
-            if res is None:
-                return await interaction.edit_original_message(content='Error.')
-
+            sql = '''SELECT channels FROM game_channels
+                     WHERE server_id=$1 AND user_id=$2'''
+            res = await conn.fetchrow(sql, guild.id, member.id)
         except Exception:
-            log.error('Error while getting category.', exc_info=True)
-            return
+            log.error('Error while getting channels.', exc_info=True)
+            return await interaction.edit_original_message(content='Error')
+
+        channels: set[int] = set(res['channels']) if res is not None else set()
+
+        # Sanity check
+        if category.id != channel.category_id:
+            return await interaction.edit_original_message(
+                content='`Error: Channel is not part of game category.'
+            )
+
+        # Check if channel is owned or admin
+        if channel.id not in channels and not (is_admin or is_moderator):
+            return await interaction.edit_original_message(
+                content="`Error: This channel doesn't belong to you.`"
+            )
+
+        await channel.delete()
+
+        msg = f'Successfully deleted ${channel.name}.'
+        return await interaction.edit_original_message(content=msg)
 
     # __________________ Game Enabled __________________
     @channels_group.command(name='add')
@@ -242,20 +244,27 @@ class Game(commands.Cog):
     # __________________ Game Enabled __________________
     # __________________ Game Enabled __________________
     # __________________ Game Enabled __________________
-    async def _get_game_settings(self, server_id: int) -> dict[str: Any]:
+    async def _get_game_settings(
+        self, guild: discord.Guild
+    ) -> tuple[discord.CategoryChannel, int]:
         try:
             conn = self.bot.pool
             sql = '''SELECT game_category, game_channels_limit FROM settings
                      WHERE server_id=$1'''
-            res = await conn.fetchrow(sql, server_id)
+            res = await conn.fetchrow(sql, guild.id)
 
-            return res
+            if res is None:
+                raise ValueError
+
+            category: discord.CategoryChannel = guild.get_channel(
+                res['game_category'])
+            limit: int = res['game_channels_limit']
+
+            return (category, limit)
 
         except Exception:
             log.error('Error while getting game settings.', exc_info=True)
             return
-
-        pass
 
     # __________________ Game Enabled __________________
     @alru_cache(maxsize=128)
