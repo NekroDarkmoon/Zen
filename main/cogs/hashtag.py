@@ -52,6 +52,13 @@ class Hashtag(commands.Cog):
         # TODO: Add exceptions
         exceptions = list()
 
+        if channel.id not in hashtags:
+            return
+
+        if member.id == self.bot.user.id:
+            return
+
+        # Check content
         found = re.search(r'\[.*?\]', content)
 
         if found is None:
@@ -70,12 +77,12 @@ class Hashtag(commands.Cog):
     hashtag_group = app_commands.Group(
         name='hashtag', description='Hashtag Commands.')
 
-    @hashtag_group.add_command(name='require')
+    @hashtag_group.command(name='require')
     @app_commands.describe(channel='Selected Channel', enable='Enable / Disable')
     async def restrict(
         self,
         interaction: discord.Interaction,
-        channel: discord.TextChannel | discord.Thread,
+        channel: discord.TextChannel,
         enable: boolean
     ) -> None:
         """ Require content posted in a channel to have hashtags. """
@@ -114,7 +121,7 @@ class Hashtag(commands.Cog):
         self._get_hashtags.cache_clear()
 
         state = 'now' if enable else 'no longer'
-        msg = f'Channel ${state} requires ` [ tag ] `.'
+        msg = f'Channel {state} requires ` [ tag ] `.'
         return await interaction.edit_original_message(content=msg)
 
     # ______________________ Get Hashtags _______________________
@@ -125,7 +132,7 @@ class Hashtag(commands.Cog):
             conn = self.bot.pool
             sql = ''' SELECT hashtags FROM settings
                       WHERE server_id=$1'''
-            res = await conn.fetch(sql, guild.id)
+            res = await conn.fetchrow(sql, guild.id)
 
             if res is None:
                 raise ValueError
@@ -134,7 +141,7 @@ class Hashtag(commands.Cog):
 
         except Exception:
             log.error('Error while fetching hashtag channels', exc_info=True)
-        pass
+            return set()
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
