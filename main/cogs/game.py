@@ -151,7 +151,7 @@ class Game(commands.Cog):
             return
 
         return await interaction.edit_original_message(
-            content=f'Successfully set up Play Channels. {channel.mention}'
+            content=f'Successfully set up game channel - {channel.mention}'
         )
 
     # __________________ Game Enabled __________________
@@ -193,7 +193,7 @@ class Game(commands.Cog):
         # Sanity check
         if category.id != channel.category_id:
             return await interaction.edit_original_message(
-                content='`Error: Channel is not part of game category.'
+                content='`Error: Channel is not part of game category.`'
             )
 
         # Check if channel is owned or admin

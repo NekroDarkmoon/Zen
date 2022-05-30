@@ -4,12 +4,17 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 from __future__ import annotations
+from ctypes import Union
+import io
 
 # Standard library imports
 import logging
+import time
+import traceback
 
+from asyncpg import Record
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, Mapping, Optional
 
 # Third party imports
 import discord
@@ -18,11 +23,13 @@ from discord.ext import commands
 
 # Local application imports
 import main.cogs.utils.formats as formats
+from main.cogs.utils.formats import TabularData, Plural
 
 
 if TYPE_CHECKING:
     from main.Zen import Zen
-    from utils.context import Context
+    from main.cogs.utils.context import Context
+
 
 GuildChannel = discord.TextChannel | discord.VoiceChannel | discord.StageChannel | discord.CategoryChannel | discord.Thread
 
@@ -40,6 +47,15 @@ class Owner(commands.Cog):
 
     async def cog_check(self, ctx: Context) -> bool:
         return await self.bot.is_owner(ctx.author)
+
+    def cleanup_code(self, content: str) -> str:
+        """Automatically removes code blocks from the code."""
+        # remove ```py\n```
+        if content.startswith('```') and content.endswith('```'):
+            return '\n'.join(content.split('\n')[1:-1])
+
+        # remove `foo`
+        return content.strip('` \n')
 
     @commands.command(hidden=True)
     async def load(self, ctx: Context, *, cog: str) -> None:
@@ -63,6 +79,7 @@ class Owner(commands.Cog):
 
     @commands.command(hidden=True)
     async def reload(self, ctx: Context, *, cog: str) -> None:
+        """ Reload a Cog"""
         try:
             await self.bot.reload_extension(f'main.cogs.{cog}')
         except commands.ExtensionError as e:
@@ -72,6 +89,8 @@ class Owner(commands.Cog):
 
     @commands.command(hidden=True)
     async def reload_all(self, ctx: Context) -> None:
+        """ Reload All Cogs"""
+
         cogs: Mapping[str, ModuleType] = self.bot.extensions
         msg = ''
 
@@ -102,6 +121,7 @@ class Owner(commands.Cog):
         guilds: commands.Greedy[discord.Object],
         spec: Optional[Literal['~', '*']] = None
     ) -> None:
+        """ Sync bot to all channels"""
 
         assert ctx.guild is not None
 
@@ -131,6 +151,43 @@ class Owner(commands.Cog):
 
         await ctx.reply(f"Synced tree to {formats.Plural(fmt):guild}.")
 
+    @commands.command(hidden=True)
+    async def sql(self, ctx: Context, *, query: str):
+        """Run some SQL."""
+        query = self.cleanup_code(query)
+
+        is_multistatement = query.count(';') > 1
+        strategy: Callable[[str],
+                           Union[Awaitable[list[Record]], Awaitable[str]]]
+        if is_multistatement:
+            # fetch does not support multiple statements
+            strategy = ctx.db.execute
+        else:
+            strategy = ctx.db.fetch
+
+        try:
+            start = time.perf_counter()
+            results = await strategy(query)
+            dt = (time.perf_counter() - start) * 1000.0
+        except Exception:
+            return await ctx.send(f'```py\n{traceback.format_exc()}\n```')
+
+        rows = len(results)
+        if isinstance(results, str) or rows == 0:
+            return await ctx.send(f'`{dt:.2f}ms: {results}`')
+
+        headers = list(results[0].keys())
+        table = TabularData()
+        table.set_columns(headers)
+        table.add_rows(list(r.values()) for r in results)
+        render = table.render()
+
+        fmt = f'```\n{render}\n```\n*Returned {Plural(rows):row} in {dt:.2f}ms*'
+        if len(fmt) > 2000:
+            fp = io.BytesIO(fmt.encode('utf-8'))
+            await ctx.send('Too many results...', file=discord.File(fp, 'results.txt'))
+        else:
+            await ctx.send(fmt)
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
