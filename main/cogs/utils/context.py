@@ -1,3 +1,4 @@
+from typing import Union
 from discord.ext import commands
 import asyncio
 import discord
@@ -241,3 +242,11 @@ class Context(commands.Context):
             return await self.send(file=discord.File(fp, filename='message_too_long.txt'), **kwargs)
         else:
             return await self.send(content)
+
+
+class GuildContext(Context):
+    author: discord.Member
+    guild: discord.Guild
+    channel: Union[discord.VoiceChannel, discord.TextChannel, discord.Thread]
+    me: discord.Member
+    prefix: str
