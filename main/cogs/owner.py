@@ -36,11 +36,10 @@ GuildChannel = discord.TextChannel | discord.VoiceChannel | discord.StageChannel
 
 log = logging.getLogger(__name__)
 
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Owner
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 class Owner(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
