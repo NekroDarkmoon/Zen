@@ -9,14 +9,10 @@ import asyncio
 import datetime
 import enum
 import logging
-import inspect
-import itertools
-import os
-import sys
 import traceback
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, MutableMapping, Optional, Union
 import asyncpg
 
 # Third party imports
@@ -35,6 +31,11 @@ from main.cogs.utils.paginator import ZenPages
 if TYPE_CHECKING:
     from main.Zen import Zen
     from utils.context import Context
+
+    class ModGuildContext(GuildContext):
+        cog: Mod
+        guild_config: ModConfig
+
 
 GuildChannel = discord.TextChannel | discord.VoiceChannel | discord.StageChannel | discord.CategoryChannel | discord.Thread
 
@@ -61,7 +62,227 @@ class RaidMode(enum.Enum):
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class ModConfig:
-    pass
+    __slots__ = {
+        'raid_mode', 'id', 'bot', 'broadcast_channel_id', 'mention_count',
+        'safe_mention_channel_ids', 'mute_role_id', 'muted_members',
+    }
+
+    bot: Zen
+    raid_mode: int
+    id: int
+    broadcast_channel_id: Optional[int]
+    mention_count: Optional[int]
+    safe_mention_channel_ids: set[int]
+    muted_members: set[int]
+    mute_role_id: Optional[int]
+
+    @classmethod
+    async def from_record(cls, record: Any, bot: Zen):
+        self = cls()
+
+        self.bot = bot
+        self.raid_mode = record['raid_mode']
+        self.id = record['id']
+        self.broadcast_channel_id = record['broadcast_channel_id']
+        self.mention_count = record['mention_count']
+        self.safe_mention_channel_ids = set(
+            record['safe_mention_channel_ids'] or [])
+        self.muted_members = set(record['muted_members'] or [])
+        self.mute_role_id = record['mute_role_id']
+        return self
+
+    @property
+    def broadcast_chanel(self) -> Optional[discord.TextChannel]:
+        guild = self.bot.get_guild(self.id)
+        return guild and guild.get_channel(self.broadcast_channel_id)
+
+    @property
+    def mute_role(self) -> Optional[discord.Role]:
+        guild = self.bot.get_guild(self.id)
+        return guild and self.mute_role_id and guild.get_role(self.mute_role_id)
+
+    def is_muted(self, member: discord.abc.Snowflake) -> bool:
+        return member.id in self.muted_members
+
+    async def apply_mute(self, member: discord.Member, reason: Optional[str]) -> None:
+        if self.mute_role_id:
+            await member.add_roles(discord.Object(id=self.mute_role_id), reason=reason)
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                         Converters
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+def can_execute_action(
+    ctx: GuildContext, user: discord.Member, target: discord.Member
+) -> bool:
+    return user.id == ctx.bot.owner_id or user == ctx.guild.owner or user.top_role > target.top_role
+
+
+class MemberID(commands.Converter):
+    async def convert(self, ctx: GuildContext, argument: str):
+        try:
+            m = await commands.MemberConverter().convert(ctx, argument)
+        except commands.BadArgument:
+            try:
+                member_id = int(argument, base=10)
+            except ValueError:
+                raise commands.BadArgument(
+                    f"{argument} is not a valid member or member ID") from None
+            else:
+                m = await ctx.bot.get_or_fetch_member(ctx.guild.id, member_id)
+                if m is None:
+                    return type('_Hackban', (), {id: member_id, '__str__': lambda s: f'Member ID {s.id}'})()
+
+        if not can_execute_action(ctx, ctx.author, m):
+            raise commands.BadArgument(
+                'You cannot do this action on this user due to role hierarchy.')
+
+        return m
+
+
+class BannedMember(commands.Converter):
+    async def convert(self, ctx: GuildContext, argument: str):
+        if argument.isdigit():
+            member_id = int(argument, base=10)
+            try:
+                return await ctx.guild.fetch_ban(discord.Object(id=member_id))
+            except discord.NotFound:
+                raise commands.BadArgument(
+                    'This member has not been banned before.') from None
+
+        entity = await discord.utils.find(lambda u: str(u.user) == argument, ctx.guild.bans(limit=None))
+
+        if entity is None:
+            raise commands.BadArgument(
+                'This member has not been banned before.')
+
+        return entity
+
+
+class ActionReason(commands.Converter):
+    async def convert(self, ctx: GuildChannel, argument: str):
+        ret = f'{ctx.author} (ID: {ctx.author.id}): {argument}'
+
+        if len(ret) > 512:
+            reason_max = 512 - len(ret) + len(argument)
+            raise commands.BadArgument(
+                f'Reason is too long ({len(argument)}/{reason_max})')
+
+        return ret
+
+
+def safe_reason_append(base: str, to_append: str) -> str:
+    appended = base + f'({to_append})'
+    if len(appended) > 512:
+        return base
+
+    return appended
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                         Import
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class CooldownByContent(commands.CooldownMapping):
+    def _bucket_key(self, msg: discord.Message) -> tuple[int, str]:
+        return (msg.channel.id, msg.content)
+
+
+class SpamChecker:
+    """This spam checker does a few things.
+    1) It checks if a user has spammed more than 10 times in 12 seconds
+    2) It checks if the content has been spammed 15 times in 17 seconds.
+    3) It checks if new users have spammed 30 times in 35 seconds.
+    4) It checks if "fast joiners" have spammed 10 times in 12 seconds.
+    5) It checks if a member spammed `config.mention_count * 2` mentions in 12 seconds.
+
+    The second case is meant to catch alternating spam bots while the first one
+    just catches regular singular spam bots.
+
+    From experience these values aren't reached unless someone is actively spamming.
+    """
+
+    def __init__(self) -> None:
+        self.by_content = CooldownByContent.from_cooldown(
+            15, 17.0, commands.BucketType.member)
+        self.by_user = commands.CooldownMapping.from_cooldown(
+            10, 12.0, commands.BucketType.user)
+        self.last_join: Optional[datetime.datetime] = None
+        self.new_user = commands.CooldownMapping.from_cooldown(
+            30, 35.0, commands.BucketType.channel)
+        self._by_mentions: Optional[commands.CooldownMapping] = None
+        self._by_mentions_rate: Optional[int] = None
+
+        # user_id flag mapping (for about 30 minutes)
+        self.fast_joiners: MutableMapping[int, bool] = cache.ExpiringCache(
+            seconds=1800.0)
+        self.hit_and_run = commands.CooldownMapping.from_cooldown(
+            10, 12, commands.BucketType.channel)
+
+    def by_mentions(self, config: ModConfig) -> Optional[commands.CooldownMapping]:
+        if not config.mention_count:
+            return None
+
+        mention_threshold = config.mention_count * 2
+        if self._by_mentions_rate != mention_threshold:
+            self._by_mentions = commands.CooldownMapping.from_cooldown(
+                mention_threshold, 12, commands.BucketType.member)
+            self._by_mentions_rate = mention_threshold
+        return self._by_mentions
+
+    def is_new(self, member: discord.Member) -> bool:
+        now = discord.utils.utcnow()
+        seven_days_ago = now - datetime.timedelta(days=7)
+        ninety_days_ago = now - datetime.timedelta(days=90)
+        return member.created_at > ninety_days_ago and member.joined_at is not None and member.joined_at > seven_days_ago
+
+    def is_spamming(self, message: discord.Message, config: ModConfig) -> bool:
+        if message.guild is None:
+            return False
+
+        current = message.created_at.timestamp()
+
+        if message.author.id in self.fast_joiners:
+            bucket = self.hit_and_run.get_bucket(message)
+            if bucket.update_rate_limit(current):
+                return True
+
+        if self.is_new(message.author):
+            new_bucket = self.new_user.get_bucket(message)
+            if new_bucket.update_rate_limit(current):
+                return True
+
+        user_bucket = self.by_user.get_bucket(message)
+        if user_bucket.update_rate_limit(current):
+            return True
+
+        content_bucket = self.by_content.get_bucket(message)
+        if content_bucket.update_rate_limit(current):
+            return True
+
+        if self.is_mention_spam(message, config, current):
+            return True
+
+        return False
+
+    def is_fast_join(self, member: discord.Member) -> bool:
+        joined = member.joined_at or discord.utils.utcnow()
+        if self.last_join is None:
+            self.last_join = joined
+            return False
+        is_fast = (joined - self.last_join).total_seconds() <= 2.0
+        self.last_join = joined
+        if is_fast:
+            self.fast_joiners[member.id] = True
+        return is_fast
+
+    def is_mention_spam(self, message: discord.Message, config: ModConfig, current: float) -> bool:
+        mapping = self.by_mentions(config)
+        if mapping is None:
+            return False
+        mention_bucket = mapping.get_bucket(message, current)
+        mention_count = sum(not m.bot and m.id !=
+                            message.author.id for m in message.mentions)
+        return mention_bucket.update_rate_limit(current, tokens=mention_count) is not None
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -72,12 +293,25 @@ class NoMuteRole(commands.CommandError):
         super().__init__('This server does not have a mute role set up.')
 
 
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Import
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-class SpamChecker:
-    def __init__(self) -> None:
-        pass
+# Decorator
+def can_mute():
+    async def predicate(ctx: ModGuildContext) -> bool:
+        is_owner = await ctx.bot.is_owner(ctx.author)
+        if ctx.guild is None:
+            return False
+
+        if not ctx.author.guild_permissions.manage_roles and not is_owner:
+            return False
+
+        # This will only be used within this cog.
+        # type: ignore
+        ctx.guild_config = config = await ctx.cog.get_guild_config(ctx.guild.id)
+        role = config and config.mute_role
+        if role is None:
+            raise NoMuteRole()
+        return ctx.author.top_role > role
+
+    return commands.check(predicate)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
