@@ -24,7 +24,7 @@ from discord.ext import menus
 
 
 # Local application imports
-from main.cogs.utils import cache, time
+from main.cogs.utils import cache, time, checks
 from main.cogs.utils.context import Context, GuildContext
 from main.cogs.utils.paginator import ZenPages
 
@@ -328,14 +328,14 @@ class Mod(commands.Cog):
 
         self._data_batch: defaultdict[int,
                                       list[tuple[int, Any]]] = defaultdict(list)
-        self._batch_lock = asyncio.Lock(loop=bot.loop)
-        self._disable_lock = asyncio.Lock(loop=bot.loop)
+        self._batch_lock = asyncio.Lock()
+        self._disable_lock = asyncio.Lock()
         self.batch_updates.add_exception_type(asyncpg.PostgresConnectionError)
         self.batch_updates.start()
 
         self.message_batches: defaultdict[tuple[int, int], list[str]] = defaultdict(
             list)
-        self._batch_message_lock = asyncio.Lock(loop=bot.loop)
+        self._batch_message_lock = asyncio.Lock()
         self.bulk_send_messages.start()
 
     @property
@@ -599,6 +599,8 @@ class Mod(commands.Cog):
     #                         Commands
 
     @commands.hybrid_group(invoke_without_command=True)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(moderate_members=True)
     async def mod(self, ctx: GuildContext) -> None:
         """ Mod Commands """
 
@@ -606,6 +608,7 @@ class Mod(commands.Cog):
             await ctx.send_help('mod')
 
     @mod.command('newusers')
+    @app_commands.describe(count='Number of members - Max 25')
     async def newusers(
             self,
             ctx: GuildContext,
@@ -636,6 +639,29 @@ class Mod(commands.Cog):
             e.add_field(name=f'{m} (ID: {m.id})', value=body, inline=False)
 
         await ctx.send(embed=e)
+
+    @mod.group('raid', invoke_without_subcommand=True)
+    # @checks.is_mod()
+    async def raid(self, ctx: GuildContext) -> None:
+        """Controls raid mode on the server.
+
+       Calling this command with no arguments will show the current raid
+       mode information.
+
+       You must have Manage Server permissions to use this command or
+       its subcommands.
+       """
+        sql = "SELECT raid_mode, broadcast_channel FROM guild_mod_config WHERE id=$1;"
+
+        row = await ctx.db.fetchrow(sql, ctx.guild.id)
+        if row is None:
+            fmt = 'Raid Mode: off\nBroadcast Channel: None'
+        else:
+            ch = f'<#{row[1]}>' if row[1] else None
+            mode = RaidMode(row[0]) if row[0] is not None else RaidMode.off
+            fmt = f'Raid Mode: {mode}\nBroadcast Channel: {ch}'
+
+        await ctx.send(fmt)
 
     async def disable_raid_mode(self, guild_id) -> None:
         sql = ''' INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)

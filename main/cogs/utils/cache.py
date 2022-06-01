@@ -99,8 +99,8 @@ class ExpiringCache(dict):
 #                         Strategy
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class Strategy(enum.Enum):
-    lru: 1
-    raw: 2
+    lru = 1
+    raw = 2
     timed = 3
 
 
