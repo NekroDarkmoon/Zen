@@ -420,7 +420,7 @@ class Mod(commands.Cog):
             self.message_batches.clear()
 
     @cache.cache()
-    async def get_guild_cache(self, guild_id: int) -> Optional[ModConfig]:
+    async def get_guild_config(self, guild_id: int) -> Optional[ModConfig]:
         sql = '''SELECT * FROM guild_mod_config WHERE id=$1'''
         async with self.bot.pool.acquire(timeout=300.0) as conn:
             record = await conn.fetchrow(sql, guild_id)
@@ -429,6 +429,29 @@ class Mod(commands.Cog):
                 return await ModConfig.from_record(record, self.bot)
 
             return None
+
+    async def check_raid(
+        self,
+        config: ModConfig,
+        guild_id: int,
+        member: discord.Member,
+        message: discord.Message
+    ) -> None:
+        if config.raid_mode != RaidMode.strict.value:
+            return
+
+        checker = self._spam_check[guild_id]
+        if not checker.is_spamming(message, config):
+            return
+
+        try:
+            await member.ban(reason='Auto-ban from spam (strict raid mode ban)')
+        except discord.HTTPException:
+            log.info(
+                f'[Raid Mode] Failed to ban {member} (ID: {member.id}) from server {member.guild} via strict mode.')
+        else:
+            log.info(
+                f'[Raid Mode] Banned {member} (ID: {member.id}) from server {member.guild} via strict mode.')
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

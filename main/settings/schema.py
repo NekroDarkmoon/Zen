@@ -35,6 +35,16 @@ tables: dict = {
         PRIMARY KEY (server_id, user_id)
     ''',
 
+    'guild_mod_config': f'''
+        id BIGINT PRIMARY KEY,
+        raid_mode INT,
+        broadcast_channel BIGINT,
+        mention_count INT,
+        safe_mention_channel_ids BIGINT ARRAY DEFAULT array[]::BIGINT[],
+        mute_role_id BIGINT,
+        muted_members BIGINT ARRAY DEFAULT array[]::BIGINT[]
+    ''',
+
     'reminders': f'''
         idx SERIAL PRIMARY KEY,
         expires TIMESTAMP NOT NULL,
