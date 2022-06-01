@@ -453,6 +453,59 @@ class Mod(commands.Cog):
             log.info(
                 f'[Raid Mode] Banned {member} (ID: {member.id}) from server {member.guild} via strict mode.')
 
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message) -> None:
+        author = message.author
+
+        # Validation
+        if author.id in (self.bot.user.id, self.bot.owner_id):
+            return
+
+        if message.guild is None or not isinstance(author, discord.Member):
+            return
+
+        if author.bot or author.guild_permissions.manage_messages:
+            return
+
+        guild_id = message.guild.id
+        config = await self.get_guild_config(guild_id)
+        if config is None:
+            return
+
+        # Check raid mode
+        await self.check_raid(config, guild_id, author, message)
+
+        # Auto ban tracking for mention spams begins here
+        if len(message.mentions) <= 3:
+            return
+
+        if not config.mention_count:
+            return
+
+        # Check if it meets the thresholds required
+        mention_count = sum(not m.bot and m.id !=
+                            author.id for m in message.mentions)
+
+        if mention_count < config.mention_count:
+            return
+
+        if message.channel.id in config.safe_mention_channel_ids:
+            return
+
+        try:
+            await author.ban(reason=f'Spamming mentions ({mention_count} mentions)')
+        except Exception as e:
+            log.info(
+                f'Failed to autoban member {author} (ID: {author.id}) in guild ID {guild_id}')
+        else:
+            to_send = f'Banned {author} (ID: {author.id}) for spamming {mention_count} mentions.'
+            async with self._batch_message_lock:
+                self.message_batches[(
+                    guild_id, message.channel.id)].append(to_send)
+
+            log.info(
+                f'Member {author} (ID: {author.id}) has been autobanned from guild ID {guild_id}')
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
