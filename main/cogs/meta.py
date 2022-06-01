@@ -4,6 +4,7 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 from __future__ import annotations
+from collections import Counter
 
 # Standard library imports
 import datetime
@@ -21,10 +22,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext import menus
-from main.cogs.utils import time
 
 
 # Local application imports
+from main.cogs.utils import formats, time
 from main.cogs.utils.context import Context, GuildContext
 from main.cogs.utils.paginator import ZenPages
 
@@ -395,14 +396,137 @@ class Meta(commands.Cog):
             e.set_footer(text='This member is not in this server.')
 
         await ctx.send(embed=e)
-        
 
     @info.command('server')
-    @app_commands.describe(guild='Guild ID')
+    @app_commands.describe(idx='Guild ID')
     async def server_info(
-        self, ctx: GuildContext, guild: Optional[int]
+        self, ctx: GuildContext, idx: Optional[int]
     ) -> None:
-        pass
+        """ Shows information about the server."""
+        await ctx.typing()
+
+        if idx is not None and await self.bot.is_owner(ctx.author):
+            guild = self.bot.get_guild(idx)
+            if guild is None:
+                return await ctx.send(f'Invalid Guild ID given.')
+
+        else:
+            guild = ctx.guild
+
+        roles = [role.name.replace('@', '@\u200b') for role in guild.roles]
+
+        if not guild.chunked:
+            await guild.chunk(cache=True)
+
+        # Get Channel counts
+        everyone = guild.default_role
+        everyone_perms = everyone.permissions.value
+        secret = Counter()
+        totals = Counter()
+        for channel in guild.channels:
+            allow, deny = channel.overwrites_for(everyone).pair()
+            perms = discord.Permissions(
+                (everyone_perms & ~deny.value) | allow.value)
+            channel_type = type(channel)
+            totals[channel_type] += 1
+            if not perms.read_messages:
+                secret[channel_type] += 1
+            elif isinstance(channel, discord.VoiceChannel) and (not perms.connect or not perms.speak):
+                secret[channel_type] += 1
+
+        e = discord.Embed(title=guild.name, colour=discord.Color.random())
+        e.description = f'**ID**: {guild.id}\n**Owner**: {guild.owner}'
+
+        if guild.icon:
+            e.set_thumbnail(url=guild.icon.url)
+
+        channel_info = list()
+        key_to_emoji = {
+            discord.TextChannel: '<:text_channel:586339098172850187>',
+            discord.VoiceChannel: '<:voice_channel:586339098524909604>',
+        }
+
+        for key, total in totals.items():
+            secrets = secret[key]
+            try:
+                emoji = key_to_emoji[key]
+            except KeyError:
+                continue
+
+            if secrets:
+                channel_info.append(f'{emoji} {total} ({secrets} locked)')
+            else:
+                channel_info.append(f'{emoji} {total}')
+
+        info = list()
+        features = set(guild.features)
+        all_features = {
+            'ANIMATED_ICON': 'Animated Icon',
+            'BANNER': 'Banner',
+            'COMMERCE': 'Commerce',
+            'COMMUNITY': 'Community Server',
+            'DISCOVERABLE': 'Server Discovery',
+            'FEATURABLE': 'Featured',
+            'INVITE_SPLASH': 'Invite Splash',
+            'NEWS': 'News Channels',
+            'PARTNERED': 'Partnered',
+            'VANITY_URL': 'Vanity Invite',
+            'VERIFIED': 'Verified',
+            'VIP_REGIONS': 'VIP Voice Servers',
+            'WELCOME_SCREEN_ENABLED': 'Welcome Screen',
+            'LURKABLE': 'Lurkable',
+            'TICKETED_EVENTS_ENABLED': 'Ticketed Events',
+            'MONETIZATION_ENABLED': 'Monetization Enabled',
+            'THREE_DAY_THREAD_ARCHIVE': 'Thread Archive Time - 3 Days',
+            'SEVEN_DAY_THREAD_ARCHIVE': 'Thread Archive Time - 7 Days',
+            'PRIVATE_THREADS': 'Private Threads',
+            'ROLE_ICONS': 'Role Icons',
+        }
+
+        for feature, label in all_features.items():
+            if feature in features:
+                info.append(f'{ctx.tick(True)}: {label}')
+
+        if info:
+            e.add_field(name='Features', value='\n'.join(info))
+
+        e.add_field(name='Channels', value='\n'.join(channel_info))
+
+        if guild.premium_tier != 0:
+            boosts = f'Level {guild.premium_tier}\n{guild.premium_subscription_count} boosts'
+            last_boost = max(
+                guild.members, key=lambda m: m.premium_since or guild.created_at)
+            if last_boost.premium_since is not None:
+                boosts = f'{boosts}\nLast Boost: {last_boost} ({time.format_relative(last_boost.premium_since)})'
+            e.add_field(name='Boosts', value=boosts, inline=False)
+
+        bots = sum(m.bot for m in guild.members)
+        fmt = f'Total: {guild.member_count} ({formats.Plural(bots):bot})'
+
+        e.add_field(name='Members', value=fmt, inline=False)
+        e.add_field(name='Roles', value=', '.join(roles)
+                    if len(roles) < 10 else f'{len(roles)} roles')
+
+        emoji_stats = Counter()
+        for emoji in guild.emojis:
+            if emoji.animated:
+                emoji_stats['animated'] += 1
+                emoji_stats['animated_disabled'] += not emoji.available
+            else:
+                emoji_stats['regular'] += 1
+                emoji_stats['disabled'] += not emoji.available
+
+        fmt = (
+            f'Regular: {emoji_stats["regular"]}/{guild.emoji_limit}\n'
+            f'Animated: {emoji_stats["animated"]}/{guild.emoji_limit}\n'
+        )
+        if emoji_stats['disabled'] or emoji_stats['animated_disabled']:
+            fmt = f'{fmt}Disabled: {emoji_stats["disabled"]} regular, {emoji_stats["animated_disabled"]} animated\n'
+
+        fmt = f'{fmt}Total Emoji: {len(guild.emojis)}/{guild.emoji_limit*2}'
+        e.add_field(name='Emoji', value=fmt, inline=False)
+        e.set_footer(text='Created').timestamp = guild.created_at
+        await ctx.send(embed=e)
 
     @info.command('self')
     async def self_info(
@@ -421,6 +545,16 @@ class Meta(commands.Cog):
     @app_commands.describe(channel='Selected Channel')
     async def channel_info(
         self, ctx: GuildContext, channel: GuildChannel
+    ) -> None:
+        pass
+
+    @info.command('permissions')
+    @app_commands.describe(member='Selected Member', channel='Selected Channel')
+    async def permissions(
+        self,
+        ctx: GuildContext,
+        member: Optional[discord.Member] = None,
+        channel: Optional[GuildChannel] = None
     ) -> None:
         pass
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
