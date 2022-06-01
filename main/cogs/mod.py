@@ -7,6 +7,7 @@ from __future__ import annotations
 # Standard library imports
 import asyncio
 import datetime
+from distutils.command.config import config
 import enum
 import logging
 import traceback
@@ -553,6 +554,46 @@ class Mod(commands.Cog):
             except discord.Forbidden:
                 async with self._disable_lock:
                     await self.disable_raid_mode(guild_id)
+
+    @commands.Cog.listener()
+    async def on_member_update(
+        self, before: discord.Member, after: discord.Member
+    ) -> None:
+        if before.roles == after.roles:
+            return
+
+        guild_id = after.guild.id
+
+        config = await self.get_guild_config(guild_id)
+        if config is None:
+            return
+
+        if config.mute_role_id is None:
+            return
+
+        before_has = before.get_role(config.mute_role_id)
+        after_has = after.get_role(config.mute_role_id)
+
+        if before_has == after_has:
+            return
+
+        async with self._batch_lock:
+            self._data_batch[guild_id].append((after.id, after_has))
+
+    @commands.Cog.listener()
+    async def on_guild_role_delete(self, role: discord.Role):
+        guild_id = role.guild.id
+
+        config = await self.get_guild_config(guild_id)
+        if config is None or config.mute_role_id != role.id:
+            return
+
+        sql = """UPDATE guild_mod_config SET (mute_role_id, muted_members)
+                 = (NULL, '{}'::BIGINT[])
+                 WHERE id=$1
+              """
+        await self.bot.pool.execute(sql, guild_id)
+        self.get_guild_config.invalidate(self, guild_id)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
