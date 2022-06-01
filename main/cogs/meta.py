@@ -21,10 +21,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext import menus
+from main.cogs.utils import time
 
 
 # Local application imports
-from main.cogs.utils.context import Context
+from main.cogs.utils.context import Context, GuildContext
 from main.cogs.utils.paginator import ZenPages
 
 
@@ -322,25 +323,122 @@ class Meta(commands.Cog):
     async def ping(self, ctx: Context) -> None:
         """Ping commands are stupid."""
         await ctx.send("Ping commands are stupid.")
+
+    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    #                 Info Commands
+    @commands.hybrid_group(invoke_without_command=True)
+    async def info(self, ctx: Context) -> None:
+        """ Display information related to the target. """
+
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help('info')
+
+    @info.command('avatar')
+    @app_commands.describe(user='Selected User')
+    async def user_avatar(
+        self, ctx: Context, user: discord.Member | discord.User
+    ) -> None:
+        """Shows a user's enlarged avatar (if possible)."""
+        # Databuilder
+        user = user or ctx.author
+        avatar = user.display_avatar.with_static_format('png')
+
+        e = discord.Embed()
+        e.set_author(name=str(user), url=avatar)
+        e.set_image(url=avatar)
+        await ctx.send(embed=e)
+
+    @info.command('user')
+    @app_commands.describe(user='Selected User')
+    async def user_info(
+        self, ctx: Context, user: discord.Member | discord.User
+    ) -> None:
+        """ Display Information about a user. """
+        await ctx.typing()
+
+        # Data builder
+        user = user or ctx.author
+        roles = [role.name.replace('@', '@\u200b')
+                 for role in getattr(user, 'roles', [])]
+
+        def format_date(dt: datetime.datetime) -> str:
+            if dt is None:
+                return "N/A"
+            return f'{time.format_dt(dt, "F")} ({time.format_relative(dt)})'
+
+        e = discord.Embed()
+        e.set_author(name=str(user))
+        e.add_field(name='ID', value=user.id, inline=False)
+        e.add_field(name='Joined', value=format_date(
+            getattr(user, 'joined_at', None)), inline=False)
+        e.add_field(name='Created', value=format_date(
+            user.created_at), inline=False)
+
+        voice = getattr(user, 'voice', None)
+        if voice is not None:
+            vc = voice.channel
+            other_people = len(vc.members) - 1
+            voice = f'{vc.name} with {other_people} others' if other_people else f'{vc.name} by themselves'
+            e.add_field(name='Voice', value=voice, inline=False)
+
+        if roles:
+            e.add_field(name='Roles', value=', '.join(roles) if len(
+                roles) < 10 else f'{len(roles)} roles', inline=False)
+
+        colour = user.colour
+        if colour.value:
+            e.colour = colour
+
+        e.set_thumbnail(url=user.display_avatar.url)
+
+        if isinstance(user, discord.User):
+            e.set_footer(text='This member is not in this server.')
+
+        await ctx.send(embed=e)
+        
+
+    @info.command('server')
+    @app_commands.describe(guild='Guild ID')
+    async def server_info(
+        self, ctx: GuildContext, guild: Optional[int]
+    ) -> None:
+        pass
+
+    @info.command('self')
+    async def self_info(
+        self, ctx: Context
+    ) -> None:
+        pass
+
+    @info.command('role')
+    @app_commands.describe(role='Selected Role')
+    async def role_info(
+        self, ctx: GuildContext, role: discord.Role
+    ) -> None:
+        pass
+
+    @info.command('channel')
+    @app_commands.describe(channel='Selected Channel')
+    async def channel_info(
+        self, ctx: GuildContext, channel: GuildChannel
+    ) -> None:
+        pass
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 async def setup(bot: Zen) -> None:
     await bot.add_cog(Meta(bot))
