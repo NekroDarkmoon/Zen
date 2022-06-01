@@ -595,9 +595,65 @@ class Mod(commands.Cog):
         await self.bot.pool.execute(sql, guild_id)
         self.get_guild_config.invalidate(self, guild_id)
 
+    # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    #                         Commands
+
+    @commands.hybrid_group(invoke_without_command=True)
+    async def mod(self, ctx: GuildContext) -> None:
+        """ Mod Commands """
+
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help('mod')
+
+    @mod.command('newusers')
+    async def newusers(
+            self,
+            ctx: GuildContext,
+            count: Optional[int] = 5
+    ) -> None:
+        """Tells you the newest members of the server.
+
+        This is useful to check if any suspicious members have
+        joined.
+
+        The count parameter can only be up to 25.
+        """
+        await ctx.typing()
+
+        count = max(min(count, 25), 5)
+
+        if not ctx.guild.chunked:
+            members = await ctx.guild.chunk(cache=True)
+
+        members = sorted(
+            ctx.guild.members, key=lambda m: m.joined_at or ctx.guild.created_at, reverse=True)[:count]
+
+        e = discord.Embed(title='New Members', color=discord.Color.green())
+
+        for m in members:
+            joined = m.joined_at or datetime.datetime(1970, 1, 1)
+            body = f'Joined {time.format_relative(joined)}\nCreated {time.format_relative(m.created_at)}'
+            e.add_field(name=f'{m} (ID: {m.id})', value=body, inline=False)
+
+        await ctx.send(embed=e)
+
+    async def disable_raid_mode(self, guild_id) -> None:
+        sql = ''' INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
+                  VALUES ($1, $2, NULL)
+                  ON CONFLICT (id)
+                  DO UPDATE SET
+                    raid_mode = EXCLUDED.raid_mode
+                    broadcast_channel = NULL'''
+
+        await self.bot.pool.execute(sql, guild_id, RaidMode.off.value)
+        self._spam_check.pop(guild_id, None)
+        self.get_guild_config.invalidate(self, guild_id)
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 async def setup(bot: Zen):
     await bot.add_cog(Mod(bot))
