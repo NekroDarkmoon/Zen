@@ -23,7 +23,7 @@ from discord.ext import menus
 
 
 # Local application imports
-from main.cogs.utils import cache
+from main.cogs.utils import cache, time
 from main.cogs.utils.context import Context, GuildContext
 from main.cogs.utils.paginator import ZenPages
 
@@ -505,6 +505,54 @@ class Mod(commands.Cog):
 
             log.info(
                 f'Member {author} (ID: {author.id}) has been autobanned from guild ID {guild_id}')
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member) -> None:
+        guild_id = member.guild.id
+
+        config = await self.get_guild_config(guild_id)
+        if config is None:
+            return
+
+        if config.is_muted(member):
+            return await config.apply_mute(member, 'Member was previously muted.')
+
+        if not config.raid_mode:
+            return
+
+        now = discord.utils.utcnow()
+
+        is_new = member.created_at > (now - datetime.timedelta(days=7))
+        checker = self._spam_check[guild_id]
+
+        # Do the broadcasted message to the channel
+        title = 'Member Joined'
+        if checker.is_fast_join(member):
+            colour = 0xDD5F53  # red
+            if is_new:
+                title = 'Member Joined (Very New Member)'
+        else:
+            colour = 0x53DDA4  # green
+
+            if is_new:
+                colour = 0xDDA453  # yellow
+                title = 'Member Joined (Very New Member)'
+
+        e = discord.Embed(title=title, colour=colour)
+        e.timestamp = now
+        e.set_author(name=str(member), icon_url=member.display_avatar.url)
+        e.add_field(name='ID', value=member.id)
+        assert member.joined_at is not None
+        e.add_field(name='Joined', value=time.format_dt(member.joined_at, "F"))
+        e.add_field(name='Created', value=time.format_relative(
+            member.created_at), inline=False)
+
+        if config.broadcast_chanel:
+            try:
+                await config.broadcast_chanel.send(embed=e)
+            except discord.Forbidden:
+                async with self._disable_lock:
+                    await self.disable_raid_mode(guild_id)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
