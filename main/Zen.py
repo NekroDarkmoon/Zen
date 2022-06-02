@@ -4,6 +4,7 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 from __future__ import annotations
+from unicodedata import name
 
 # Standard library imports
 import aiohttp
@@ -68,11 +69,10 @@ class ZenCommandTree(app_commands.CommandTree):
         except discord.HTTPException:
             pass
 
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                           Zen
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 class Zen(commands.AutoShardedBot):
     user: discord.ClientUser
     session: aiohttp.ClientSession
@@ -133,6 +133,10 @@ class Zen(commands.AutoShardedBot):
             except Exception as e:
                 print(f'Failed to load cog {cog}.', file=sys.stderr)
                 traceback.print_exc()
+
+        # Set Status
+        self.activity = discord.Activity(
+            name=config.activity, type=discord.ActivityType.watching)
 
     @property
     def owner(self) -> discord.User:
