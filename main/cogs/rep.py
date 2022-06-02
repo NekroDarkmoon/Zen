@@ -200,8 +200,16 @@ class Rep(commands.Cog):
         reaction: discord.Reaction,
         member: discord.Member | discord.User
     ) -> None:
+
         # Active Validation
         if not await self._get_rep_enabled(reaction.message.guild.id):
+            return
+
+        # Check if forbidden channel
+        if message.channel.id in await self._get_excluded_channels(member.guild.id):
+            return
+
+        if member.bot:
             return
 
         # Data Builder
@@ -229,6 +237,8 @@ class Rep(commands.Cog):
                                    last_received=$4'''
             await conn.execute(sql, guild.id, author.id, 1, now)
             await reaction.message.add_reaction('✅')
+
+            self.bot.dispatch('rep_received', message, guild, [author])
 
         except Exception:
             log.error('Error while giving reaction rep', exc_info=True)

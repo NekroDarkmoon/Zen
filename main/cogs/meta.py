@@ -4,7 +4,6 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 from __future__ import annotations
-from collections import Counter
 
 # Standard library imports
 import datetime
@@ -15,6 +14,7 @@ import os
 import sys
 import traceback
 
+from collections import Counter
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 # Third party imports
