@@ -205,13 +205,6 @@ class Rep(commands.Cog):
         if not await self._get_rep_enabled(reaction.message.guild.id):
             return
 
-        # Check if forbidden channel
-        if message.channel.id in await self._get_excluded_channels(member.guild.id):
-            return
-
-        if member.bot:
-            return
-
         # Data Builder
         author = reaction.message.author
         guild = reaction.message.guild
