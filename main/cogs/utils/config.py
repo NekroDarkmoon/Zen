@@ -49,12 +49,12 @@ class Config(Generic[_T]):
             await self.loop.run_in_executor(None, self.load_from_file)
 
     def _dump(self):
-        temp = f'{uuid.uuid4()}-{self.name}.tmp'
+        temp = f'{self.name}-{uuid.uuid4()}.tmp'
         with open(temp, 'w', encoding='utf-8') as tmp:
             json.dump(self._db.copy(), tmp, ensure_ascii=True,
                       cls=self.encoder, separators=(',', ':'))
 
-            os.replace(temp, self.name)
+        os.replace(temp, self.name)
 
     async def save(self) -> None:
         async with self.lock:

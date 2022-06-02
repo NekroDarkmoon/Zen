@@ -4,6 +4,8 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from discord.ext import commands
 
+from main.cogs.utils.context import GuildContext
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                       Async Checks
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -56,5 +58,26 @@ async def check_permissions(ctx, perms, *, check=all) -> bool:
 def has_permissions(*, check=all, **perms):
     async def pred(ctx):
         return await check_permissions(ctx, perms, check=check)
+
+    return commands.check(pred)
+
+
+def has_guild_permissions(*, check=all, **perms: bool):
+    async def pred(ctx: GuildContext):
+        return await check_guild_permissions(ctx, perms, check=check)
+
+    return commands.check(pred)
+
+
+def is_mod():
+    async def pred(ctx: GuildContext) -> bool:
+        return await check_guild_permissions(ctx, {'manage_guild': True})
+
+    return commands.check(pred)
+
+
+def is_admin():
+    async def pred(ctx: GuildContext) -> bool:
+        return await check_guild_permissions(ctx, {'administrator': True})
 
     return commands.check(pred)

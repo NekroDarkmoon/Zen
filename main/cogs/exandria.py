@@ -28,9 +28,9 @@ from discord.ext import menus
 
 # Local application imports
 from main.settings import config
-from main.cogs.utils import formats, time
+from main.cogs.utils import checks
+from main.cogs.utils.config import Config
 from main.cogs.utils.context import Context, GuildContext
-from main.cogs.utils.paginator import ZenPages
 
 
 if TYPE_CHECKING:
@@ -69,6 +69,8 @@ class Exandria(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
         self.approved_tags = config.approved_tags
+        self.participants: Config[set[str]] = Config(
+            './events/tr/participants.json', loop=bot.loop)
 
     async def cog_check(self, ctx: Context) -> bool:
         return ctx.guild in [719063399148814418, 739684323141353597]
@@ -78,6 +80,11 @@ class Exandria(commands.Cog):
         # Validation
         if message.channel.id in [947881939732410379, 739684323807985686]:
             await self._handle_themed_event(message)
+
+            # Add participant
+            participants = self.participants.get(message.guild.id) or set()
+            participants.add(message.author.display_name)
+            await self.participants.put(message.guild.id, participants)
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
@@ -159,6 +166,13 @@ class Exandria(commands.Cog):
         out_f = Path(f'{location}{folder}/{idx}')
         out_f.parent.mkdir(exist_ok=True, parents=True)
         out_f.unlink()
+
+    # -----------------------------------------------------------------------
+    #                               Commands
+    @commands.command()
+    @checks.is_mod()
+    async def start_theme(self, ctx: Context, region: str) -> None:
+        pass
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
