@@ -87,7 +87,7 @@ class Zen(commands.AutoShardedBot):
             roles=False, everyone=False, users=True)
         intents = discord.Intents.all()
         super().__init__(
-            command_prefix='~',
+            command_prefix=config.prefix,
             description=description,
             pm_help=None,
             help_attr=dict(hidden=True),

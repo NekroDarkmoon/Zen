@@ -330,7 +330,7 @@ class Settings(commands.Cog):
         await interaction.response.defer()
 
         # Check if exists
-        await self._check_existence(guild)
+        await self._check_existence(interaction.guild)
 
         # Data builder
         conn = self.bot.pool
@@ -366,7 +366,7 @@ class Settings(commands.Cog):
         await interaction.response.defer()
 
         # Check if exists
-        await self._check_existence(guild)
+        await self._check_existence(interaction.guild)
 
         # Data builder
         conn = self.bot.pool
