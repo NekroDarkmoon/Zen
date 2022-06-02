@@ -31,7 +31,7 @@ tables: dict = {
     'game_channels': f'''
         server_id BIGINT NOT NULL,
         user_id BIGINT NOT NULL,
-        channels BIGINT ARRAY DEFAULT NULL,
+        channels BIGINT ARRAY DEFAULT array[]::BIGINT[],
         PRIMARY KEY (server_id, user_id)
     ''',
 

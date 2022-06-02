@@ -89,6 +89,9 @@ class Rep(commands.Cog):
         if message.channel.id in await self._get_excluded_channels(message.guild.id):
             return
 
+        if message.author.bot:
+            return
+
         # Validation
         def check(msg):
             checks = [

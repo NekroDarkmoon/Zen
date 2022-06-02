@@ -106,17 +106,17 @@ class Game(commands.Cog):
         game_category, channel_limit = await self._get_game_settings(guild)
 
         channels = await self._get_game_channels(guild, member)
-        print(f'{len(channels)} / {channel_limit}')
-        if len(channels) >= channel_limit:
-            return await ctx.reply("You've reached the max limit of game channels that you can own.")
+        if len(channels) >= channel_limit and not member.guild_permissions.administrator:
+            return await ctx.reply(
+                f"You've reached the max limit of game channels that you can own {len(channel) / {channel_limit}}. ")
 
         # Sanitize name
         name = re.sub(r'[^0-9a-zA-Z]+', '',
                       name.lower().replace(' ', '-')[:20])
 
         # Text Channel Perms
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        overwrites = game_category.overwrites
+        new_overwrites = {
             member: discord.PermissionOverwrite(
                 read_messages=True,
                 manage_messages=True,
@@ -124,6 +124,7 @@ class Game(commands.Cog):
                 mention_everyone=False,
             )
         }
+        overwrites.update(new_overwrites)
 
         channel = await guild.create_text_channel(
             name=name, overwrites=overwrites, category=game_category
@@ -186,7 +187,7 @@ class Game(commands.Cog):
 
         # Update db
         try:
-            sql = '''SELECT user_id FROM game_channels
+            sql = '''SELECT user_id, channels FROM game_channels
                      WHERE server_id=$1 AND $2=ANY(channels)'''
 
             res = await conn.fetchrow(sql, guild.id, channel.id)
@@ -195,6 +196,8 @@ class Game(commands.Cog):
                 pass
             else:
                 user_id = res['user_id']
+                channels = set(res['channels'])
+                channels.remove(channel.id)
 
             sql = '''INSERT INTO game_channels(server_id, user_id, channels)
                      VALUES($1, $2, $3)
