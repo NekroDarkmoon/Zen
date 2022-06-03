@@ -652,6 +652,11 @@ class Mod(commands.Cog):
        You must have Manage Server permissions to use this command or
        its subcommands.
        """
+
+        # Moderator Validation
+        if not ctx.author.guild_permissions.manage_guild:
+            return
+
         sql = "SELECT raid_mode, broadcast_channel FROM guild_mod_config WHERE id=$1;"
 
         row = await ctx.db.fetchrow(sql, ctx.guild.id)
@@ -673,13 +678,20 @@ class Mod(commands.Cog):
         channel: Optional[discord.TextChannel]
     ) -> None:
         """Enables basic raid mode on the server.
+
           When enabled, server verification level is set to high
           and allows the bot to broadcast new members joining
           to a specified channel.
+
           If no channel is given, then the bot will broadcast join
           messages on the channel this command was used in.
           """
         await ctx.typing()
+
+        # Moderator Validation
+        if not ctx.author.guild_permissions.manage_guild:
+            return
+
         channel_id: int = channel.id if channel else ctx.channel.id
 
         try:
@@ -703,11 +715,16 @@ class Mod(commands.Cog):
     @checks.is_mod()
     async def raid_off(self, ctx: GuildContext) -> None:
         """Disables raid mode on the server.
+
         When disabled, the server verification levels are set
         back to Low levels and the bot will stop broadcasting
         join messages.
         """
         await ctx.typing()
+
+        # Moderator Validation
+        if not ctx.author.guild_permissions.manage_guild:
+            return
 
         try:
             await ctx.guild.edit(verification_level=discord.VerificationLevel.low)
@@ -725,13 +742,21 @@ class Mod(commands.Cog):
         channel: Optional[discord.TextChannel]
     ) -> None:
         """Enables strict raid mode on the server.
+
         Strict mode is similar to regular enabled raid mode, with the added
         benefit of auto-banning members that are spamming. The threshold for
         spamming depends on a per-content basis and also on a per-user basis
         of 15 messages per 17 seconds.
+
         If this is considered too strict, it is recommended to fall back to regular
         raid mode.
         """
+        await ctx.typing()
+
+        # Moderator Validation
+        if not ctx.author.guild_permissions.manage_guild:
+            return
+
         channel_id: int = channel.id if channel else ctx.channel.id
 
         perms = ctx.me.guild_permissions
@@ -798,12 +823,15 @@ class Mod(commands.Cog):
     @commands.command()
     async def cleanup(self, ctx: GuildContext, search: int = 100):
         """Cleans up the bot's messages from the channel.
+
         If a search number is specified, it searches that many messages to delete.
         If the bot has Manage Messages permissions then it will try to delete
         messages that look like they invoked the bot as well.
+
         After the cleanup is completed, the bot will send you a message with
         which people got their messages deleted and their count. This is useful
         to see which users are spammers.
+
         Members with Manage Messages can search up to 1000 messages.
         Members without can search up to 25 messages.
         """
@@ -834,6 +862,7 @@ class Mod(commands.Cog):
 
         await ctx.send('\n'.join(messages), delete_after=10)
 
+    # ______________________ Kick Command _________________________
     @mod.command(name='kick')
     @checks.has_permissions(kick_members=True)
     async def kick(
@@ -843,9 +872,14 @@ class Mod(commands.Cog):
         reason: Annotated[Optional[str], ActionReason] = None
     ) -> None:
         """Kicks a member from the server.
+
         In order for this to work, the bot must have Kick Member permissions.
         To use this command you must have Kick Members permission.
         """
+        # Moderator Validation
+        if not ctx.author.guild_permissions.kick_members:
+            return
+
         if reason is None:
             reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
 
@@ -856,10 +890,9 @@ class Mod(commands.Cog):
         await ctx.guild.kick(member, reason=reason)
         await ctx.send('\N{OK HAND SIGN}')
 
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 async def setup(bot: Zen):
     await bot.add_cog(Mod(bot))
