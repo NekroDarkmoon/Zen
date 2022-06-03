@@ -84,10 +84,10 @@ class Exandria(commands.Cog):
             await self._handle_themed_event(message)
 
             # Add participant
-            # if message.author.bot or message.author.id == 157433182331863040:
-            #     return
+            if message.author.bot or message.author.id == 157433182331863040:
+                return
 
-            participants = self.participants.get(message.guild.id) or set()
+            participants = self.participants.get(message.guild.id, [])
             participants = set(participants)
             participants.add(message.author.id)
             await self.participants.put(message.guild.id, list(participants))
@@ -203,7 +203,7 @@ class Exandria(commands.Cog):
         guild = ctx.guild
 
         # Get data
-        participants = self.participants.get(guild.id) or []
+        participants = self.participants.get(guild.id, [])
         num_p = len(participants)
         winner = random.choice(participants)
         participants = [(await self.bot.get_or_fetch_member(guild, p)).__str__() for p in participants]

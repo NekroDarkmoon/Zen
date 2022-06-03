@@ -13,7 +13,7 @@ import logging
 import traceback
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, MutableMapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Counter, MutableMapping, Optional, Union
 import asyncpg
 
 # Third party imports
@@ -597,16 +597,15 @@ class Mod(commands.Cog):
 
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     #                         Commands
-
     @commands.hybrid_group(invoke_without_command=True)
     @app_commands.guild_only()
     @app_commands.default_permissions(moderate_members=True)
     async def mod(self, ctx: GuildContext) -> None:
         """ Mod Commands """
-
         if ctx.invoked_subcommand is None:
             await ctx.send_help('mod')
 
+    # _______________________ New Users _________________________
     @mod.command('newusers')
     @app_commands.describe(count='Number of members - Max 25')
     async def newusers(
@@ -640,6 +639,7 @@ class Mod(commands.Cog):
 
         await ctx.send(embed=e)
 
+    # _______________________ Raid Group _________________________
     @mod.group('raid', invoke_without_subcommand=True)
     @checks.is_mod()
     async def raid(self, ctx: GuildContext) -> None:
@@ -663,6 +663,7 @@ class Mod(commands.Cog):
 
         await ctx.send(fmt)
 
+    # _______________________ Raid On _________________________
     @raid.command(name='on')
     @checks.is_mod()
     async def raid_on(
@@ -696,6 +697,7 @@ class Mod(commands.Cog):
         self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Raid mode enabled. Broadcasting join messages to <#{channel_id}>.')
 
+    # _______________________ Raid Off _________________________
     @raid.command(name='off')
     @checks.is_mod()
     async def raid_off(self, ctx: GuildContext) -> None:
@@ -713,6 +715,45 @@ class Mod(commands.Cog):
         await self.disable_raid_mode(ctx.guild.id)
         await ctx.send('Raid mode disabled. No longer broadcasting join messages.')
 
+    # _______________________ Raid Strict _________________________
+    @raid.command(name='strict')
+    @checks.is_mod()
+    async def raid_strict(
+        self,
+        ctx: GuildContext,
+        channel: Optional[discord.TextChannel]
+    ) -> None:
+        """Enables strict raid mode on the server.
+        Strict mode is similar to regular enabled raid mode, with the added
+        benefit of auto-banning members that are spamming. The threshold for
+        spamming depends on a per-content basis and also on a per-user basis
+        of 15 messages per 17 seconds.
+        If this is considered too strict, it is recommended to fall back to regular
+        raid mode.
+        """
+        channel_id: int = channel.id if channel else ctx.channel.id
+
+        perms = ctx.me.guild_permissions
+        if not (perms.kick_members and perms.ban_members):
+            return await ctx.send('\N{NO ENTRY SIGN} I do not have permissions to kick and ban members.')
+
+        try:
+            await ctx.guild.edit(verification_level=discord.VerificationLevel.high)
+        except discord.HTTPException:
+            await ctx.send('\N{WARNING SIGN} Could not set verification level.')
+
+        query = """INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
+                   VALUES ($1, $2, $3) ON CONFLICT (id)
+                   DO UPDATE SET
+                        raid_mode = EXCLUDED.raid_mode,
+                        broadcast_channel = EXCLUDED.broadcast_channel;
+                """
+
+        await ctx.db.execute(query, ctx.guild.id, RaidMode.strict.value, channel_id)
+        self.get_guild_config.invalidate(self, ctx.guild.id)
+        await ctx.send(f'Raid mode enabled strictly. Broadcasting join messages to <#{channel_id}>.')
+
+    # _______________________ Raid Off _________________________
     async def disable_raid_mode(self, guild_id) -> None:
         sql = '''INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
                     VALUES ($1, $2, NULL)
@@ -724,6 +765,73 @@ class Mod(commands.Cog):
         await self.bot.pool.execute(sql, guild_id, RaidMode.off.value)
         self._spam_check.pop(guild_id, None)
         self.get_guild_config.invalidate(self, guild_id)
+
+    # ______________________ Cleanup Commands _________________________
+    async def _basic_cleanup_strategy(self, ctx: GuildContext, search: int):
+        count = 0
+        async for msg in ctx.history(limit=search, before=ctx.message):
+            if msg.author == ctx.me and not (msg.mentions or msg.role_mentions):
+                await msg.delete()
+                count += 1
+        return {'Bot': count}
+
+    async def _complex_cleanup_strategy(self, ctx: GuildContext, search: int):
+        prefixes = tuple(self.bot.get_guild_prefixes(
+            ctx.guild))  # thanks startswith
+
+        def check(m):
+            return m.author == ctx.me or m.content.startswith(prefixes)
+
+        deleted = await ctx.channel.purge(limit=search, check=check, before=ctx.message)
+        return Counter(m.author.display_name for m in deleted)
+
+    async def _regular_user_cleanup_strategy(self, ctx: GuildContext, search: int):
+        prefixes = tuple(self.bot.get_guild_prefixes(ctx.guild))
+
+        def check(m):
+            return (m.author == ctx.me or m.content.startswith(prefixes)) and not (m.mentions or m.role_mentions)
+
+        deleted = await ctx.channel.purge(limit=search, check=check, before=ctx.message)
+        return Counter(m.author.display_name for m in deleted)
+
+    @commands.command()
+    async def cleanup(self, ctx: GuildContext, search: int = 100):
+        """Cleans up the bot's messages from the channel.
+        If a search number is specified, it searches that many messages to delete.
+        If the bot has Manage Messages permissions then it will try to delete
+        messages that look like they invoked the bot as well.
+        After the cleanup is completed, the bot will send you a message with
+        which people got their messages deleted and their count. This is useful
+        to see which users are spammers.
+        Members with Manage Messages can search up to 1000 messages.
+        Members without can search up to 25 messages.
+        """
+
+        strategy = self._basic_cleanup_strategy
+        is_mod = ctx.channel.permissions_for(ctx.author).manage_messages
+        if ctx.channel.permissions_for(ctx.me).manage_messages:
+            if is_mod:
+                strategy = self._complex_cleanup_strategy
+            else:
+                strategy = self._regular_user_cleanup_strategy
+
+        if is_mod:
+            search = min(max(2, search), 1000)
+        else:
+            search = min(max(2, search), 25)
+
+        spammers = await strategy(ctx, search)
+        deleted = sum(spammers.values())
+        messages = [
+            f'{deleted} message{" was" if deleted == 1 else "s were"} removed.']
+        if deleted:
+            messages.append('')
+            spammers = sorted(spammers.items(),
+                              key=lambda t: t[1], reverse=True)
+            messages.extend(
+                f'- **{author}**: {count}' for author, count in spammers)
+
+        await ctx.send('\n'.join(messages), delete_after=10)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

@@ -70,6 +70,22 @@ class ZenCommandTree(app_commands.CommandTree):
             pass
 
 
+def _prefix_callable(bot: Zen, msg: discord.Message):
+    user_id = bot.user.id
+    base = [f'<@!{user_id}> ', f'<@{user_id}> ']
+    if msg.guild is None:
+        base.append(config.prefix)
+    else:
+        base.extend(bot.prefixes.get(msg.guild.id, [config.prefix]))
+    return base
+
+
+class ProxyObject(discord.Object):
+    def __init__(self, guild: Optional[discord.abc.Snowflake]) -> None:
+        super().__init__(id=0)
+        self.guild: Optional[discord.abc.Snowflake] = guild
+
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                           Zen
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -176,16 +192,20 @@ class Zen(commands.AutoShardedBot):
         elif isinstance(error, commands.ArgumentParsingError):
             await ctx.send(str(error))
 
-    # def get_raw_guild_prefixes(self, guild_id: int) -> list[str]:
-    #     return self.prefixes.get(guild_id, ['?', '!'])
+    def get_guild_prefixes(self, guild: Optional[discord.abc.Snowflake], *, local_inject=_prefix_callable) -> list[str]:
+        proxy_msg = ProxyObject(guild)
+        return local_inject(self, proxy_msg)  # type: ignore  # lying
 
-    # async def set_guild_prefixes(self, guild: discord.abc.Snowflake, prefixes: list[str]) -> None:
-    #     if len(prefixes) == 0:
-    #         await self.prefixes.put(guild.id, [])
-    #     elif len(prefixes) > 10:
-    #         raise RuntimeError('Cannot have more than 10 custom prefixes.')
-    #     else:
-    #         await self.prefixes.put(guild.id, sorted(set(prefixes), reverse=True))
+    def get_raw_guild_prefixes(self, guild_id: int) -> list[str]:
+        return self.prefixes.get(guild_id, [config.prefix])
+
+    async def set_guild_prefixes(self, guild: discord.abc.Snowflake, prefixes: list[str]) -> None:
+        if len(prefixes) == 0:
+            await self.prefixes.put(guild.id, [])
+        elif len(prefixes) > 10:
+            raise RuntimeError('Cannot have more than 10 custom prefixes.')
+        else:
+            await self.prefixes.put(guild.id, sorted(set(prefixes), reverse=True))
 
     async def add_to_blacklist(self, object_id: int):
         await self.blacklist.put(object_id, True)
