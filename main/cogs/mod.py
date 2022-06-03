@@ -14,6 +14,7 @@ import traceback
 
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Counter, MutableMapping, Optional, Union
+from typing_extensions import Annotated
 import asyncpg
 
 # Third party imports
@@ -833,9 +834,32 @@ class Mod(commands.Cog):
 
         await ctx.send('\n'.join(messages), delete_after=10)
 
+    @mod.command(name='kick')
+    @checks.has_permissions(kick_members=True)
+    async def kick(
+        self,
+        ctx: GuildContext,
+        member: Annotated[discord.abc.Snowflake, MemberID],
+        reason: Annotated[Optional[str], ActionReason] = None
+    ) -> None:
+        """Kicks a member from the server.
+        In order for this to work, the bot must have Kick Member permissions.
+        To use this command you must have Kick Members permission.
+        """
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        confirm = await ctx.prompt(f'This will kick {member.__str__()}. Are you sure?', reacquire=False)
+        if not confirm:
+            return await ctx.send('Aborting.')
+
+        await ctx.guild.kick(member, reason=reason)
+        await ctx.send('\N{OK HAND SIGN}')
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 async def setup(bot: Zen):
     await bot.add_cog(Mod(bot))
