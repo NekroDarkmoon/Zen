@@ -213,7 +213,7 @@ class Exandria(commands.Cog):
         content += f'`DRAW PRIZE GOES TO:` {(await self.bot.get_or_fetch_member(guild, winner)).mention}\n'
         content += f'`END OF REGION {region.upper()}. All submitted resources will be compiled into a document shortly and be available for consumption.`'
         content += f'\n\n`Thank you to everyone that participated.'
-        content += f'Stats: {{participants: {num_p}}}`\n'
+        content += f' Stats: {{participants: {num_p}}}`\n'
         content += f'`Participants: {", ".join(participants)}`'
 
         await ctx.send(content)

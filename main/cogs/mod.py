@@ -641,7 +641,7 @@ class Mod(commands.Cog):
         await ctx.send(embed=e)
 
     @mod.group('raid', invoke_without_subcommand=True)
-    # @checks.is_mod()
+    @checks.is_mod()
     async def raid(self, ctx: GuildContext) -> None:
         """Controls raid mode on the server.
 
@@ -663,12 +663,62 @@ class Mod(commands.Cog):
 
         await ctx.send(fmt)
 
+    @raid.command(name='on')
+    @checks.is_mod()
+    async def raid_on(
+        self,
+        ctx: GuildContext,
+        channel: Optional[discord.TextChannel]
+    ) -> None:
+        """Enables basic raid mode on the server.
+          When enabled, server verification level is set to high
+          and allows the bot to broadcast new members joining
+          to a specified channel.
+          If no channel is given, then the bot will broadcast join
+          messages on the channel this command was used in.
+          """
+        await ctx.typing()
+        channel_id: int = channel.id if channel else ctx.channel.id
+
+        try:
+            await ctx.guild.edit(verification_level=discord.VerificationLevel.high)
+        except discord.HTTPException:
+            await ctx.send('\N{WARNING SIGN} Could not set verification level.')
+
+        query = """INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
+                   VALUES ($1, $2, $3) ON CONFLICT (id)
+                   DO UPDATE SET
+                        raid_mode = EXCLUDED.raid_mode,
+                        broadcast_channel = EXCLUDED.broadcast_channel;
+                """
+
+        await ctx.db.execute(query, ctx.guild.id, RaidMode.on.value, channel_id)
+        self.get_guild_config.invalidate(self, ctx.guild.id)
+        await ctx.send(f'Raid mode enabled. Broadcasting join messages to <#{channel_id}>.')
+
+    @raid.command(name='off')
+    @checks.is_mod()
+    async def raid_off(self, ctx: GuildContext) -> None:
+        """Disables raid mode on the server.
+        When disabled, the server verification levels are set
+        back to Low levels and the bot will stop broadcasting
+        join messages.
+        """
+        await ctx.typing()
+
+        try:
+            await ctx.guild.edit(verification_level=discord.VerificationLevel.low)
+        except discord.HTTPException:
+            await ctx.send('\N{WARNING SIGN} Could not set verification level.')
+        await self.disable_raid_mode(ctx.guild.id)
+        await ctx.send('Raid mode disabled. No longer broadcasting join messages.')
+
     async def disable_raid_mode(self, guild_id) -> None:
-        sql = ''' INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
-                  VALUES ($1, $2, NULL)
-                  ON CONFLICT (id)
-                  DO UPDATE SET
-                    raid_mode = EXCLUDED.raid_mode
+        sql = '''INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
+                    VALUES ($1, $2, NULL)
+                    ON CONFLICT (id)
+                    DO UPDATE SET
+                    raid_mode = EXCLUDED.raid_mode,
                     broadcast_channel = NULL'''
 
         await self.bot.pool.execute(sql, guild_id, RaidMode.off.value)
@@ -679,7 +729,5 @@ class Mod(commands.Cog):
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 async def setup(bot: Zen):
     await bot.add_cog(Mod(bot))
