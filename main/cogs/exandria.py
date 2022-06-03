@@ -4,6 +4,7 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 from __future__ import annotations
+import asyncio
 
 # Standard library imports
 import datetime
@@ -11,6 +12,7 @@ import logging
 import inspect
 import itertools
 import os
+import random
 import re
 import sys
 import traceback
@@ -69,11 +71,11 @@ class Exandria(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
         self.approved_tags = config.approved_tags
-        self.participants: Config[set[str]] = Config(
+        self.participants: Config[list[int]] = Config(
             './events/tr/participants.json', loop=bot.loop)
 
     async def cog_check(self, ctx: Context) -> bool:
-        return ctx.guild in [719063399148814418, 739684323141353597]
+        return ctx.guild.id in [719063399148814418, 739684323141353597]
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
@@ -82,9 +84,13 @@ class Exandria(commands.Cog):
             await self._handle_themed_event(message)
 
             # Add participant
+            # if message.author.bot or message.author.id == 157433182331863040:
+            #     return
+
             participants = self.participants.get(message.guild.id) or set()
-            participants.add(message.author.display_name)
-            await self.participants.put(message.guild.id, participants)
+            participants = set(participants)
+            participants.add(message.author.id)
+            await self.participants.put(message.guild.id, list(participants))
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
@@ -169,10 +175,48 @@ class Exandria(commands.Cog):
 
     # -----------------------------------------------------------------------
     #                               Commands
-    @commands.command()
-    @checks.is_mod()
+    @commands.command(name='start_theme')
+    @commands.has_permissions(administrator=True)
     async def start_theme(self, ctx: Context, region: str) -> None:
-        pass
+        # Create content
+        separator = '```\n.' + ('\n' * 50) + '.\n```'
+        month = datetime.datetime.now().strftime('%B %Y')
+        content = f"`Month of {month} - Region {region.upper()}`\n"
+        content += f"`Map -->` https://media.discordapp.net/attachments/725862865176625254/946156671405809754/exandria_themed_space.png"
+        content += '\n`For event information check` --> <#970866227935334450>'
+
+        # Empty participants
+        await self.participants.put(ctx.guild.id, [])
+
+        # Send to channel
+        await ctx.send(separator)
+        await ctx.send(content)
+        asyncio.sleep(3)
+        await ctx.send('```\n \n```')
+
+        # Delete original message
+        await ctx.message.delete()
+
+    @commands.command(name='end_theme')
+    @commands.has_permissions(administrator=True)
+    async def end_theme(self, ctx: Context, region: str) -> None:
+        guild = ctx.guild
+
+        # Get data
+        participants = self.participants.get(guild.id) or []
+        num_p = len(participants)
+        winner = random.choice(participants)
+        participants = [(await self.bot.get_or_fetch_member(guild, p)).__str__() for p in participants]
+
+        # Content
+        content = f'<@&980602495564939264> \n\n'
+        content += f'`DRAW PRIZE GOES TO:` {(await self.bot.get_or_fetch_member(guild, winner)).mention}\n'
+        content += f'`END OF REGION {region.upper()}. All submitted resources will be compiled into a document shortly and be available for consumption.`'
+        content += f'\n\n`Thank you to everyone that participated.'
+        content += f'Stats: {{participants: {num_p}}}`\n'
+        content += f'`Participants: {", ".join(participants)}`'
+
+        await ctx.send(content)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
