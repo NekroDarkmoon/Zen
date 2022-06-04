@@ -921,6 +921,41 @@ class Mod(commands.Cog):
         await ctx.guild.ban(member, reason=reason)
         await ctx.message.add_reaction('\N{OK HAND SIGN}')
 
+    # ______________________ SoftBan Command _________________________
+    @mod.command(name='softban')
+    @checks.has_permissions(kick_members=True)
+    async def ban(
+        self,
+        ctx: GuildContext,
+        member: Annotated[discord.abc.Snowflake, MemberID],
+        reason: Annotated[Optional[str], ActionReason] = None
+    ) -> None:
+        """Soft Bans a member from the server.
+
+        A softban is basically banning the member from the server but
+        then unbanning the member as well. This allows you to essentially
+        kick the member while removing their messages.
+
+        In order for this to work, the bot must have Ban Member permissions.
+
+        To use this command you must have Kick Members permissions.
+        """
+        # Moderator Validation
+        if not ctx.author.guild_permissions.kick_members:
+            return
+
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        confirm = await ctx.prompt(f'This will softban {member.__str__()}. Are you sure?', reacquire=False)
+        if not confirm:
+            return await ctx.send('Aborting.')
+
+        await ctx.guild.ban(member, reason=reason)
+        await ctx.guild.unban(member, reason=reason)
+        await ctx.message.add_reaction('\N{OK HAND SIGN}')
+
+    # ______________________ Unban Command _________________________
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
