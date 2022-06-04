@@ -992,6 +992,75 @@ class Mod(commands.Cog):
 
         await ctx.message.add_reaction('\N{OK HAND SIGN}')
 
+    # ______________________ Purge Command _________________________
+    @mod.group()
+    @commands.guild_only()
+    @checks.has_permissions(manage_messages=True)
+    async def remove(self, ctx: GuildChannel) -> None:
+        """Removes messages that meet a criteria.
+
+        In order to use this command, you must have Manage Messages permissions.
+        Note that the bot needs Manage Messages as well. These commands cannot
+        be used in a private message.
+
+        When the command is done doing its work, you will get a message
+        detailing which users got removed and how many messages got removed.
+        """
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(ctx.command)
+
+    async def do_removal(
+        self,
+        ctx: GuildContext,
+        limit: int,
+        predicate: Callable[[discord.Message], Any],
+        *,
+        before: Optional[int] = None,
+        after: Optional[int] = None
+    ) -> None:
+
+        if not ctx.author.guild_permissions.manage_messages:
+            return
+
+        if limit > 2000:
+            return await ctx.send(f'Too many messages to search given ({limit}/2000)')
+
+        if before is None:
+            passed_before = ctx.message
+        else:
+            passed_before = discord.Object(id=before)
+
+        if after is not None:
+            passed_after = discord.Object(id=after)
+        else:
+            passed_after = None
+
+        try:
+            deleted = await ctx.channel.purge(
+                limit=limit, before=passed_before, after=passed_after, check=predicate
+            )
+        except discord.Forbidden as e:
+            return await ctx.send('I do not have permissions to  delete messages.')
+        except discord.HTTPException as e:
+            return await ctx.send(f'Error: {e} (try a smaller search?)')
+
+        spammers = Counter(m.author.display_name for m in deleted)
+        deleted = len(deleted)
+        messages = [
+            f'{deleted} message{" was" if deleted == 1 else "s were"} removed.']
+        if deleted:
+            messages.append('')
+            spammers = sorted(spammers.items(),
+                              key=lambda t: t[1], reverse=True)
+            messages.extend(f'**{name}**: {count}' for name, count in spammers)
+
+        to_send = '\n'.join(messages)
+
+        if len(to_send) > 2000:
+            await ctx.send(f'Successfully removed {deleted} messages.', delete_after=20)
+        else:
+            await ctx.send(to_send, delete_after=20)
+
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
