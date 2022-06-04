@@ -41,6 +41,72 @@ log = logging.getLogger('__name__')
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                         Timer
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class Timer:
+    __slots__ = ('args', 'kwargs', 'event', 'id', 'created_at', 'expires')
+
+    def __init__(self, *, record: asyncpg.Record) -> None:
+        self.id = record.id['id']
+
+        extra = record['extra']
+        self.args: Sequence[Any] = extra.get('args', [])
+        self.kwargs: dict[str, Any] = extra.get('kwargs', [])
+        self.event: str = record['event']
+        self.created_at: datetime.datetime = record['created']
+        self.expires: datetime.datetime = record['expires']
+
+    @property
+    def human_delta(self) -> str:
+        return time.format_relative(self.created_at)
+
+    @property
+    def author_id(self) -> Optional[int]:
+        if self.args:
+            return int(self.args[0])
+        return None
+
+    @classmethod
+    def temp(
+        cls,
+        *,
+        expires: datetime.datetime,
+        created: datetime.datetime,
+        event: str,
+        args: Sequence[Any],
+        kwargs: dict[str, Any]
+    ) -> Self:
+        pseudo = {
+            'id': None,
+            'extra': {'args': args, 'kwargs': kwargs},
+            'event': event,
+            'created': created,
+            'expires': expires,
+        }
+
+        return cls(record=pseudo)
+
+    def __eq__(self, other: object) -> bool:
+        try:
+            return self.id == other.id
+        except AttributeError:
+            return False
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __repr__(self) -> str:
+        return f'<Timer created={self.created_at} expires={self.expires} event={self.event}>'
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                         Setup
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                         Setup
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Main
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class Reminder(commands.Cog):
