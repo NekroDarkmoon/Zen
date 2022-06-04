@@ -71,6 +71,14 @@ tables: dict = {
         time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ''',
 
+    'reminders': f'''
+        idx SERIAL PRIMARY KEY NOT NULL,
+        created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires TIMESTAMP,
+        event TEXT,
+        extra JSON DEFAULT '{{}}'::jsonb
+    ''',
+
     'rewards': f'''
         server_id BIGINT NOT NULL,
         role_id BIGINT NOT NULL,
