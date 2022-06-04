@@ -1097,6 +1097,46 @@ class Mod(commands.Cog):
         else:
             await self.do_removal(ctx, 100, lambda e: substr in e.content)
 
+    @remove.command(name='bot')
+    async def _bot(
+        self,
+        ctx: GuildContext,
+        prefix: Optional[str] = None,
+        search: int = 100
+    ) -> None:
+        """Removes a bot user's messages and messages with their optional prefix."""
+        def predicate(m: discord.Message) -> bool:
+            return (m.webhook_id is None and m.author.bot) or (prefix and m.content.startswith(prefix))
+
+        await self.do_removal(ctx, search, predicate)
+
+    @remove.command(name='emojis')
+    async def _emoji(self, ctx: GuildContext, search: int = 100) -> None:
+        """Removes all messages containing custom emoji."""
+        custom_emoji = re.compile(r'<a?:[a-zA-Z0-9\_]+:([0-9]+)>')
+
+        def predicate(m: discord.Message) -> bool:
+            return custom_emoji.search(m.content)
+
+        await self.do_removal(ctx, search, predicate)
+
+    @remove.command(name='reactions')
+    async def _reactions(self, ctx: GuildContext, search: int = 100):
+        """Removes all reactions from messages that have them."""
+        if not ctx.author.guild_permissions.manage_messages:
+            return
+
+        if search > 2000:
+            return await ctx.send(f'Too many messages to search for ({search}/2000)')
+
+        total_reactions = 0
+        async for message in ctx.history(limit=search, before=ctx.message):
+            if len(message.reactions):
+                total_reactions += sum(r.count for r in message.reactions)
+                await message.clear_reaction()
+
+        await ctx.send(f'Successfully removed {total_reactions} reactions.')
+
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
