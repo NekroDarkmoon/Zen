@@ -1061,6 +1061,42 @@ class Mod(commands.Cog):
         else:
             await ctx.send(to_send, delete_after=20)
 
+    @remove.command(name='embeds')
+    async def embeds(self, ctx: GuildContext, search: int = 100) -> None:
+        """Removes messages that have embeds in them."""
+        await self.do_removal(ctx, search, lambda e: len(e.embeds))
+
+    @remove.command(name='files')
+    async def files(self, ctx: GuildContext, search: int = 100) -> None:
+        """Removes messages that have attachments in them."""
+        await self.do_removal(ctx, search, lambda e: len(e.attachments))
+
+    @remove.command(name='images')
+    async def images(self, ctx: GuildContext, search: int = 100) -> None:
+        """Removes messages that have embeds and attachments in them."""
+        await self.do_removal(ctx, search, lambda e: len(e.embeds) or len(e.attachments))
+
+    @remove.command(name='all')
+    async def _remove_all(self, ctx: GuildContext, search: int = 100) -> None:
+        """Removes all messages."""
+        await self.do_removal(ctx, search, lambda e: True)
+
+    @remove.command(name='users')
+    async def users(self, ctx: GuildContext, member: discord.Member, search: int = 100) -> None:
+        """Removes messages that have embeds in them."""
+        await self.do_removal(ctx, search, lambda e: e.author == member)
+
+    @remove.command(name='contains')
+    async def contains(self, ctx: GuildContext, substr: str) -> None:
+        """Removes all messages containing a substring.
+
+        The substring must be at least 3 characters long.
+        """
+        if len(substr) < 3:
+            await ctx.send('The substring length must be at least 3 characters.')
+        else:
+            await self.do_removal(ctx, 100, lambda e: substr in e.content)
+
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
