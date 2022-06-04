@@ -891,7 +891,36 @@ class Mod(commands.Cog):
             return await ctx.send('Aborting.')
 
         await ctx.guild.kick(member, reason=reason)
-        await ctx.send('\N{OK HAND SIGN}')
+        await ctx.message.add_reaction('\N{OK HAND SIGN}')
+
+    # ______________________ Ban Command _________________________
+    @mod.command(name='ban')
+    @checks.has_permissions(ban_members=True)
+    async def ban(
+        self,
+        ctx: GuildContext,
+        member: Annotated[discord.abc.Snowflake, MemberID],
+        reason: Annotated[Optional[str], ActionReason] = None
+    ) -> None:
+        """Bans a member from the server.
+
+        In order for this to work, the bot must have Ban Member permissions.
+        To use this command you must have Ban Members permission.
+        """
+        # Moderator Validation
+        if not ctx.author.guild_permissions.ban_members:
+            return
+
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        confirm = await ctx.prompt(f'This will ban {member.__str__()}. Are you sure?', reacquire=False)
+        if not confirm:
+            return await ctx.send('Aborting.')
+
+        await ctx.guild.ban(member, reason=reason)
+        await ctx.message.add_reaction('\N{OK HAND SIGN}')
+
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
