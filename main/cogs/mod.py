@@ -956,6 +956,42 @@ class Mod(commands.Cog):
         await ctx.message.add_reaction('\N{OK HAND SIGN}')
 
     # ______________________ Unban Command _________________________
+    @mod.command(name='unban')
+    @checks.has_permissions(ban_members=True)
+    async def ban(
+        self,
+        ctx: GuildContext,
+        member: Annotated[discord.abc.Snowflake, MemberID],
+        reason: Annotated[Optional[str], ActionReason] = None
+    ) -> None:
+        """Unbans a member from the server.
+
+        You can pass either the ID of the banned member or the Name#Discrim
+        combination of the member. Typically the ID is easiest to use.
+
+        In order for this to work, the bot must have Ban Member permissions.
+        To use this command you must have Ban Members permission.
+        """
+        # Moderator Validation
+        if not ctx.author.guild_permissions.ban_members:
+            return
+
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        confirm = await ctx.prompt(f'This will ban {member.__str__()}. Are you sure?', reacquire=False)
+        if not confirm:
+            return await ctx.send('Aborting.')
+
+        await ctx.guild.unban(member, reason=reason)
+
+        if member.reason:
+            await ctx.send(f'Unbanned {member.user} (ID: {member.user.id}), previously banned for {member.reason}.')
+        else:
+            await ctx.send(f'Unbanned {member.user} (ID: {member.user.id}).')
+
+        await ctx.message.add_reaction('\N{OK HAND SIGN}')
+
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
