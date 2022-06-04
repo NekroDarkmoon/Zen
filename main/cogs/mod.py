@@ -5,17 +5,18 @@
 from __future__ import annotations
 
 # Standard library imports
+import argparse
+import shlex
+import asyncpg
 import asyncio
 import datetime
-from distutils.command.config import config
 import enum
 import logging
-import traceback
+import re
 
-from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Counter, MutableMapping, Optional, Union
+from collections import Counter, defaultdict
+from typing import TYPE_CHECKING, Any, Callable, MutableMapping, Optional, Union
 from typing_extensions import Annotated
-import asyncpg
 
 # Third party imports
 import discord
@@ -26,13 +27,11 @@ from discord.ext import menus
 
 # Local application imports
 from main.cogs.utils import cache, time, checks
-from main.cogs.utils.context import Context, GuildContext
-from main.cogs.utils.paginator import ZenPages
 
 
 if TYPE_CHECKING:
     from main.Zen import Zen
-    from utils.context import Context
+    from utils.context import Context, GuildContext
 
     class ModGuildContext(GuildContext):
         cog: Mod
@@ -47,6 +46,10 @@ log = logging.getLogger('__name__')
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class Arguments(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise RuntimeError(message)
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
