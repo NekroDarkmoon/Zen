@@ -66,6 +66,10 @@ class Game(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{VIDEO GAME}')
+
     # --------------------------------------------------
     #               App Commands Settings
     @commands.hybrid_group(invoke_without_command=True)
