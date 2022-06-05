@@ -161,12 +161,44 @@ class Reminder(commands.Cog):
 
             return await self.get_active_timer(connection=conn, days=days)
 
-    async def dispatch_times(self) -> None:
-        ...
+    async def call_timer(self, timer: Timer) -> None:
+        sql = '''DELETE FROM reminders WHERE id=$1'''
+        await self.bot.pool.execute(sql, timer.id)
+
+        event_name = f'{timer.event}_timer_complete'
+        self.bot.dispatch(event_name, timer)
+
+    async def dispatch_timers(self) -> None:
+        try:
+            while not self.bot.is_closed():
+                # can only asyncio.sleep for up to ~48 days reliably
+                # so we're gonna cap it off at 40 days
+                # see: http://bugs.python.org/issue20493
+                timer = self._current_timer = await self.wait_for_active_timers(days=40)
+                now = datetime.datetime.utcnow()
+
+                if timer.expires >= now:
+                    to_sleep = (timer.expires - now).total_seconds()
+                    await asyncio.sleep(to_sleep)
+
+                await self.call_timer(timer)
+
+        except asyncio.CancelledError:
+            raise
+        except (OSError, discord.ConnectionClosed, asyncpg.PostgresConnectionError):
+            self._task.cancel()
+            self._task = self.bot.loop.create_task(self.dispatch_timers())
+
+    async def short_timer_optimization(self, seconds: int, timer: Timer) -> None:
+        await asyncio.sleep(seconds)
+        event_name = f'{timer.event}_timer_complete'
+        self.bot.dispatch(event_name, timer)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 async def setup(bot: Zen):
     await bot.add_cog(Reminder(bot))
