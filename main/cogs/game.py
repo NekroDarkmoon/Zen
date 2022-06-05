@@ -92,7 +92,7 @@ class Game(commands.Cog):
         self,
         ctx: Context,
         name: str,
-        hidden: bool,
+        hidden: Optional[bool] = False,
     ) -> None:
         """Creates a game channel."""
         # Defer
@@ -156,10 +156,10 @@ class Game(commands.Cog):
         self,
         ctx: Context,
         channel: discord.TextChannel,
-        hidden: bool
+        hidden: Optional[bool] = False,
     ) -> None:
         """Deletes a game channel."""
-        await ctx.typing(ephemeral=bool)
+        await ctx.typing(ephemeral=hidden)
 
         # Validation
         if not await self._get_game_enabled(ctx.guild.id):
@@ -228,13 +228,13 @@ class Game(commands.Cog):
         ctx: Context,
         channel: discord.TextChannel,
         users: commands.Greedy[discord.Member],
-        hidden: bool
+        hidden: Optional[bool] = False,
         # users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
     ) -> None:
         """Adds users to a game channel."""
 
         # Defer Response
-        await ctx.typing(ephemeral=bool)
+        await ctx.typing(ephemeral=hidden)
 
         # Validation
         if not await self._get_game_enabled(ctx.guild.id):
@@ -280,13 +280,13 @@ class Game(commands.Cog):
         ctx: Context,
         channel: discord.TextChannel,
         users: commands.Greedy[discord.Member],
-        hidden: bool
+        hidden: Optional[bool] = False,
         # users: app_commands.Transform[list[discord.Member], StringMemberTransformer],
     ) -> None:
         """Removes users from a game channel."""
 
         # Defer Response
-        await ctx.typing(ephemeral=bool)
+        await ctx.typing(ephemeral=hidden)
 
         # Validation
         if not await self._get_game_enabled(ctx.guild.id):
