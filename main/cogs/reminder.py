@@ -135,7 +135,7 @@ class Reminder(commands.Cog):
         self._task.cancel()
 
     # ********************************************************
-    #                      Time Functions
+    #                      Timer Functions
     async def get_active_timer(
         self, *, connection: Optional[asyncpg.Connection] = None, days: int = 7
     ) -> Optional[Timer]:
@@ -297,6 +297,10 @@ class Reminder(commands.Cog):
             log.error(
                 'Error occurred while sending reminder message.', exc_info=True)
             return
+
+    # ********************************************************
+    #                      Commands
+    
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
