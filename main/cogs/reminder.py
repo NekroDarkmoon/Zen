@@ -114,6 +114,27 @@ class Reminder(commands.Cog):
 
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
+        self._have_data = asyncio.Event(loop=bot.loop)
+        self._current_timer = Optional[Timer] = None
+        self._task = bot.loop.create_task(self.dispatch_timers())
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{ALARM CLOCK}')
+
+    async def cog_command_error(self, ctx: Context, error: commands.CommandError) -> None:
+        if isinstance(error, commands.BadArgument):
+            await ctx.send(str(error))
+        if isinstance(error, commands.TooManyArguments):
+            await ctx.send(f'You called the {ctx.command.name} command with too many arguments.')
+
+    def cog_unload(self) -> None:
+        self._task.cancel()
+
+    async def dispatch_times(self) -> None:
+        ...
+
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
