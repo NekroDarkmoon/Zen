@@ -6,8 +6,11 @@ import datetime
 
 # Standard library imports
 import logging
+from typing_extensions import Self
 
-from typing import TYPE_CHECKING, Optional
+import parsedatetime as pdt
+
+from typing import TYPE_CHECKING, Any, Optional
 
 # Third party imports
 from discord.ext import commands
@@ -28,8 +31,36 @@ log = logging.getLogger(__name__)
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Imports
+#                         Human Time
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class HumanTime:
+    calendar = pdt.Calendar(version=pdt.VERSION_CONTEXT_STYLE)
+
+    def __init__(
+        self,
+        argument: str,
+        *,
+        now: Optional[datetime.datetime] = None
+    ) -> None:
+        now = now or datetime.datetime.utcnow()
+        dt, status = self.calendar.parseDT(argument, sourceTime=now)
+
+        if not status.hasDateOrTime:
+            raise commands.BadArgument(
+                'Invalid time provided, try e.g. "tomorrow" or "3 days"')
+
+        if not status.hasTime:
+            dt: datetime.datetime = dt.replace(
+                hour=now.hour, minute=now.minute, second=now.second, microsecond=now.microsecond
+            )
+
+        self.dt: datetime.datetime = dt
+        self._past: bool = dt < now
+
+    @classmethod
+    async def convert(cls, ctx: Context, argument: str) -> Self:
+        return cls(argument, now=ctx.message.created_at)
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
