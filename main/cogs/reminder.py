@@ -6,6 +6,7 @@ from __future__ import annotations
 
 # Standard library imports
 import argparse
+from multiprocessing.connection import Connection
 import shlex
 import asyncpg
 import asyncio
@@ -26,7 +27,7 @@ from discord.ext import menus
 
 
 # Local application imports
-from main.cogs.utils import cache, time, checks
+from main.cogs.utils import cache, checks, db, time
 
 
 if TYPE_CHECKING:
@@ -130,6 +131,35 @@ class Reminder(commands.Cog):
 
     def cog_unload(self) -> None:
         self._task.cancel()
+
+    # ********************************************************
+    #                      Time Functions
+    async def get_active_timer(
+        self, *, connection: Optional[asyncpg.Connection] = None, days: int = 7
+    ) -> Optional[Timer]:
+        # Data builder
+        conn = connection or self.bot.pool
+
+        sql = '''SELECT * FROM reminders WHERE expires < (CURRENT_DATE + $1::interval)
+                 ORDER BY expires LIMIT 1'''
+        res = await conn.fetchrow(sql, datetime.timedelta(days=days))
+
+        return Timer(record=res) if res else None
+
+    async def wait_for_active_timers(
+        self, *, connection: Optional[asyncpg.Connection] = None, days: int = 7
+    ):
+        async with db.MaybeAcquire(connection=connection, pool=self.bot.pool) as conn:
+            timer = await self.get_active_timer(connection=conn, days=days)
+            if timer is not None:
+                self._have_data.set()
+                return timer
+
+            self._have_data.clear()
+            self._current_timer = None
+            await self._have_data.wait()
+
+            return await self.get_active_timer(connection=conn, days=days)
 
     async def dispatch_times(self) -> None:
         ...
