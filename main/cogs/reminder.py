@@ -9,6 +9,7 @@ import argparse
 from multiprocessing import connection
 from multiprocessing.connection import Connection
 import shlex
+from threading import Thread
 import asyncpg
 import asyncio
 import datetime
@@ -22,7 +23,7 @@ from typing_extensions import Annotated
 
 # Third party imports
 import discord
-from discord import app_commands
+from discord import TextChannel, app_commands
 from discord.ext import commands, tasks
 from discord.ext import menus
 
@@ -268,6 +269,34 @@ class Reminder(commands.Cog):
             self._task = self.bot.loop.create_task(self.dispatch_timers())
 
         return timer
+
+    @commands.Cog.listener()
+    async def on_reminder_timer_complete(self, timer: Timer) -> None:
+        author_id, channel_id, message = timer.args
+
+        try:
+            channel = self.bot.get_channel(channel_id) or (await self.bot.fetch_channel(channel_id))
+        except discord.HTTPException:
+            return
+
+        guild_id = channel.guild.id if isinstance(
+            channel, (discord.TextChannel, discord.Thread)) else '@me'
+        message_id: Optional[int] = timer.kwargs.get('message_id')
+        msg = f'<@{author_id}>, {timer.human_delta}: {message}'
+        view = discord.utils.MISSING
+
+        if message_id:
+            url = f'https://discord.com/channels/{guild_id}/{channel_id}/{message_id}'
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(
+                label='Go to original message', url=url))
+
+        try:
+            await channel.send(msg, view=view)
+        except discord.HTTPException:
+            log.error(
+                'Error occurred while sending reminder message.', exc_info=True)
+            return
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
