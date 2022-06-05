@@ -6,6 +6,7 @@ from __future__ import annotations
 
 # Standard library imports
 import argparse
+from multiprocessing import connection
 from multiprocessing.connection import Connection
 import shlex
 import asyncpg
@@ -193,6 +194,80 @@ class Reminder(commands.Cog):
         await asyncio.sleep(seconds)
         event_name = f'{timer.event}_timer_complete'
         self.bot.dispatch(event_name, timer)
+
+    async def create_timer(self, *args: Any, **kwargs: Any) -> Timer:
+        r"""Creates a timer.
+
+        Parameters
+        -----------
+        when: datetime.datetime
+            When the timer should fire.
+        event: str
+            The name of the event to trigger.
+            Will transform to 'on_{event}_timer_complete'.
+        \*args
+            Arguments to pass to the event
+        \*\*kwargs
+            Keyword arguments to pass to the event
+        connection: asyncpg.Connection
+            Special keyword-only argument to use a specific connection
+            for the DB request.
+        created: datetime.datetime
+            Special keyword-only argument to use as the creation time.
+            Should make the timedeltas a bit more consistent.
+
+        Note
+        ------
+        Arguments and keyword arguments must be JSON serialisable.
+
+        Returns
+        --------
+        :class:`Timer`
+        """
+
+        when, event, *args = args
+
+        try:
+            connection = kwargs.pop('connection')
+        except KeyError:
+            connection = self.bot.pool
+
+        try:
+            now = kwargs.pop('created')
+        except KeyError:
+            now = discord.utils.utcnow()
+
+        when: datetime.datetime = when.astimezone(
+            datetime.timezone.utc).replace(tzinfo=None)
+        now = now.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+        timer = Timer.temp(event=event, args=args,
+                           kwargs=kwargs, expires=when, created=now)
+        delta = (when - now).total_seconds()
+
+        if delta <= 120:
+            self.bot.loop.create_task(
+                self.short_timer_optimization(delta, timer))
+            return timer
+
+        sql = '''INSERT INTO reminders (event, extra, expires, created)
+                 VALUES ($1, $2, $3, $4)
+                 RETURNING id
+              '''
+
+        res = await connection.fetchrow(sql, event, {'args': args, 'kwargs': kwargs}, when, now)
+        timer.id = res[0]
+
+        # Only set the data check if it can be waited on
+        if delta <= (86400 * 40):  # 40 Days
+            self._have_data.set()
+
+        # Check if this timer is earlier than our currently run timer
+        if self._current_timer and when < self._current_timer.expires:
+            self._task.cancel()
+            self._task = self.bot.loop.create_task(self.dispatch_timers())
+
+        return timer
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
