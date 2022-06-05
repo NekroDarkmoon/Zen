@@ -6,6 +6,7 @@ from __future__ import annotations
 
 # Standard library imports
 import argparse
+from email.policy import default
 from multiprocessing import connection
 from multiprocessing.connection import Connection
 import shlex
@@ -300,13 +301,19 @@ class Reminder(commands.Cog):
 
     # ********************************************************
     #                      Commands
-    
+    @commands.hybrid_group(invoke_without_command=True)
+    async def remind(
+        self,
+        ctx: Context,
+        *,
+        when: Annotated[time.FriendlyTimeResult, time.UserFriendlyTime(
+            commands.clean_content, default='...')]
+    ) -> None:
+        pass
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 async def setup(bot: Zen):
     await bot.add_cog(Reminder(bot))
