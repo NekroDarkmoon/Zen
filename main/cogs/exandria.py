@@ -191,7 +191,7 @@ class Exandria(commands.Cog):
         # Send to channel
         await ctx.send(separator)
         await ctx.send(content)
-        asyncio.sleep(3)
+        await asyncio.sleep(3)
         await ctx.send('```\n \n```')
 
         # Delete original message
