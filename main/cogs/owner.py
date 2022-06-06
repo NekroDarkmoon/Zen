@@ -260,12 +260,12 @@ class Owner(commands.Cog):
             except:
                 pass
 
-        if ret is None:
-            if value:
-                await ctx.send(f'```py\n{value}\n```')
-        else:
-            self._last_result = ret
-            await ctx.send(f'```py\n{value}{ret}\n```')
+            if ret is None:
+                if value:
+                    await ctx.send(f'```py\n{value}\n```')
+            else:
+                self._last_result = ret
+                await ctx.send(f'```py\n{value}{ret}\n```')
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
