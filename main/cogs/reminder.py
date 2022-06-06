@@ -118,8 +118,8 @@ class Reminder(commands.Cog):
 
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
-        self._have_data = asyncio.Event(loop=bot.loop)
-        self._current_timer = Optional[Timer] = None
+        self._have_data = asyncio.Event()
+        self._current_timer: Optional[Timer] = None
         self._task = bot.loop.create_task(self.dispatch_timers())
 
     @property
