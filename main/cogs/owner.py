@@ -4,17 +4,20 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 from __future__ import annotations
-from ctypes import Union
-import io
 
 # Standard library imports
+import asyncio
+import io
 import logging
+import subprocess
+import textwrap
 import time
 import traceback
 
 from asyncpg import Record
+from contextlib import redirect_stdout
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, Mapping, Optional, Union
 
 # Third party imports
 import discord
@@ -43,10 +46,16 @@ log = logging.getLogger(__name__)
 class Owner(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
+        self._last_result: Optional[Any] = None
+        self.sessions: set[int] = set()
 
+    # -------------------------------------------------------
+    #                    Cog Functions
     async def cog_check(self, ctx: Context) -> bool:
         return await self.bot.is_owner(ctx.author)
 
+    # -------------------------------------------------------
+    #                   Helper Functions
     def cleanup_code(self, content: str) -> str:
         """Automatically removes code blocks from the code."""
         if content.startswith('```') and content.endswith('```'):
@@ -54,6 +63,30 @@ class Owner(commands.Cog):
 
         # remove `foo`
         return content.strip('` \n')
+
+    async def run_process(self, command: str) -> list[str]:
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            result = await process.communicate()
+
+        except NotImplementedError:
+            process = subprocess.Popen(
+                command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            result = await self.bot.loop.run_in_executor(None, process.communicate)
+
+        return [output.decode() for output in result]
+
+    def get_syntax_error(self, e: SyntaxError) -> str:
+        if e.text is None:
+            return f'```py\n{e.__class__.__name__}: {e}\n```'
+
+        return f'```py\n{e.text}{"^":>{e.offset}}\n{e.__class__.__name__}: {e}```'
+
+    # -------------------------------------------------------
+    #                     Commands
 
     @commands.command(hidden=True)
     async def load(self, ctx: Context, *, cog: str) -> None:
@@ -187,10 +220,56 @@ class Owner(commands.Cog):
         else:
             await ctx.send(fmt)
 
+    @commands.command(hidden=True, name='eval')
+    async def _eval(self, ctx: Context, *, body: str) -> None:
+        """ Evaluates code """
+
+        env = {
+            'bot': self.bot,
+            'ctx': ctx,
+            'channel': ctx.channel,
+            'author': ctx.author,
+            'guild': ctx.guild,
+            'message': ctx.message,
+            '_': self._last_result,
+        }
+
+        env.update(globals())
+
+        body = self.cleanup_code(body)
+        stdout = io.StringIO()
+
+        to_compile = f'async def func():\n{textwrap.indent(body, " ")}'
+
+        try:
+            exec(to_compile, env)
+        except Exception as e:
+            return await ctx.send(f'```py\n{e.__class__.__name__}: {e}\n```')
+
+        func = env['func']
+        try:
+            with redirect_stdout(stdout):
+                ret = await func()
+        except Exception as e:
+            value = stdout.getvalue()
+            await ctx.send(f'```py\n{value}{traceback.format_exc()}\n```')
+        else:
+            value = stdout.getvalue()
+            try:
+                await ctx.message.add_reaction('\u2705')
+            except:
+                pass
+
+        if ret is None:
+            if value:
+                await ctx.send(f'```py\n{value}\n```')
+        else:
+            self._last_result = ret
+            await ctx.send(f'```py\n{value}{ret}\n```')
+
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 async def setup(bot: Zen) -> None:
     await bot.add_cog(Owner(bot))
