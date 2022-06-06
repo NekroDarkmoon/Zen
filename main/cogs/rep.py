@@ -80,6 +80,7 @@ class Rep(commands.Cog):
 
     # ______________________ On Message Rep _______________________
     @commands.Cog.listener()
+    @commands.guild_only()
     async def on_message(self, message: discord.Message):
         # Check if xp enabled
         if not await self._get_rep_enabled(message.guild.id):
@@ -195,6 +196,7 @@ class Rep(commands.Cog):
 
     # _____________________ On Reaction Add _______________________
     @commands.Cog.listener(name='on_reaction_add')
+    @commands.guild_only()
     async def on_reaction_add(
         self,
         reaction: discord.Reaction,
@@ -241,6 +243,7 @@ class Rep(commands.Cog):
 
     # _____________________ On Reaction Remove _______________________
     @commands.Cog.listener(name='on_reaction_remove')
+    @commands.guild_only()
     async def on_reaction_remove(
         self,
         reaction: discord.Reaction,
