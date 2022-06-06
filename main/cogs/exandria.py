@@ -9,13 +9,8 @@ import asyncio
 # Standard library imports
 import datetime
 import logging
-import inspect
-import itertools
-import os
 import random
 import re
-import sys
-import traceback
 
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
@@ -23,9 +18,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 # Third party imports
 import discord
-from discord import app_commands
 from discord.ext import commands
-from discord.ext import menus
 
 
 # Local application imports
@@ -127,9 +120,8 @@ class Exandria(commands.Cog):
 
         # Possibly scan all tags
         if primary_tag.lower() not in self.approved_tags:
-            # TODO: Place into other
+            # Place into other
             folder = 'other'
-            return
         else:
             folder = primary_tag.lower()
 
