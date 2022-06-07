@@ -295,12 +295,21 @@ class XP(commands.Cog):
             log.error('Error while retrieving xp data', exc_info=True)
 
         # Make data usable
-        data = [{
-            'Rank': row['rank'],
-            'User': (await self.bot.get_or_fetch_member(guild, row['user_id'])).__str__(),
-            'Level': row['level'],
-            'XP': row['xp'],
-        } for row in rows]
+        data = list()
+        pos = 1
+        for row in rows:
+            m = await self.bot.get_or_fetch_member(guild, row['user_id'])
+            if m is None:
+                continue
+
+            data.append({
+                'Rank': row['rank'],
+                'User': m.__str__(),
+                'Level': row['level'],
+                'XP': row['xp'],
+            })
+
+            pos += 1
 
         # Start paginator
         ctx = await commands.Context.from_interaction(interaction)
