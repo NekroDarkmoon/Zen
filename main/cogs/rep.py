@@ -334,9 +334,9 @@ class Rep(commands.Cog):
         # Build message
         rep: int = res['rep'] if res is not None else 0
         last_gave: str = format_dt(
-            res['last_gave_rep'], 'R') if res is not None else 'Never'
+            res['last_gave_rep'], 'R', False) if res is not None else 'Never'
         last_received: str = format_dt(
-            res['last_received'], 'R') if res is not None else 'Never'
+            res['last_received'], 'R', False) if res is not None else 'Never'
 
         e = discord.Embed(title=member.display_name,
                           color=discord.Color.random())
