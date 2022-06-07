@@ -3,6 +3,7 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
 from datetime import datetime
+from email import message
 
 # Standard library imports
 import logging
@@ -46,6 +47,9 @@ class Logging(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         # Validation
+        if message.guild is None:
+            return
+
         if message.author.bot or not message.type == discord.MessageType.default:
             return
 
@@ -72,6 +76,9 @@ class Logging(commands.Cog):
 
     @commands.Cog.listener(name='on_message_delete')
     async def on_message_delete(self, msg: discord.Message) -> None:
+        if msg.guild is None:
+            return
+
         # Validation
         regex = "^[^\"\'\.\w]"  # noqa
 
@@ -123,6 +130,9 @@ class Logging(commands.Cog):
     @commands.Cog.listener(name="on_message_edit")
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
         # Validation
+        if before.guild is None or after.guild is None:
+            return
+
         if (before.author.bot) or (before.content == after.content):
             return
 
@@ -181,6 +191,9 @@ class Logging(commands.Cog):
     @commands.Cog.listener(name='on_member_update')
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
         # Validate
+        if before.guild is None or after.guild is None:
+            return
+
         if before.bot or (before.nick == after.nick):
             return
 
@@ -207,6 +220,9 @@ class Logging(commands.Cog):
     @commands.Cog.listener(name='on_member_remove')
     async def on_member_remove(self, member: discord.Member) -> None:
         # Validation
+        if member.guild is None:
+            return
+
         channel_id = await self._get_logging_channel(member.guild.id)
         if channel_id is None:
             return

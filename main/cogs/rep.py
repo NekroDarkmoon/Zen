@@ -73,6 +73,9 @@ class Rep(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
 
+    async def cog_check(self, ctx: Context) -> bool:
+        return ctx.message.guild is not None
+
     # --------------------------------------------------
     #               App Commands Settings
     rep_group = app_commands.Group(
@@ -80,10 +83,9 @@ class Rep(commands.Cog):
 
     # ______________________ On Message Rep _______________________
     @commands.Cog.listener()
-    @commands.guild_only()
     async def on_message(self, message: discord.Message):
-        # Check if xp enabled
-        if not await self._get_rep_enabled(message.guild.id):
+        # Check if rep enabled
+        if message.guild is None or not await self._get_rep_enabled(message.guild.id):
             return
 
         # Check if forbidden channel
@@ -196,12 +198,14 @@ class Rep(commands.Cog):
 
     # _____________________ On Reaction Add _______________________
     @commands.Cog.listener(name='on_reaction_add')
-    @commands.guild_only()
     async def on_reaction_add(
         self,
         reaction: discord.Reaction,
         member: discord.Member | discord.User
     ) -> None:
+
+        if reaction.message.guild is None:
+            return
 
         # Active Validation
         if not await self._get_rep_enabled(reaction.message.guild.id):
@@ -243,12 +247,14 @@ class Rep(commands.Cog):
 
     # _____________________ On Reaction Remove _______________________
     @commands.Cog.listener(name='on_reaction_remove')
-    @commands.guild_only()
     async def on_reaction_remove(
         self,
         reaction: discord.Reaction,
         member: discord.Member | discord.User
     ) -> None:
+        if reaction.message.guild is None:
+            return
+
         # Active Validation
         if not await self._get_rep_enabled(reaction.message.guild.id):
             return

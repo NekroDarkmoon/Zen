@@ -38,6 +38,9 @@ class XP(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
 
+    async def cog_check(self, ctx: Context) -> bool:
+        return False if ctx.guild is None else True
+
     # --------------------------------------------------
     #               App Commands Settings
     xp_group = app_commands.Group(
@@ -47,6 +50,9 @@ class XP(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         # Validation
+        if message.guild is None:
+            return
+
         if re.search(r"^[^\"\'\.\w]", message.content) or message.author.bot:
             return
 

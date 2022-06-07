@@ -40,8 +40,15 @@ class Hashtag(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
 
+    async def cog_check(self, ctx: Context) -> bool:
+        return ctx.message.guild is not None
+
     @commands.Cog.listener(name='on_message')
     async def on_message(self, message: discord.Message) -> None:
+
+        if message.guild is None:
+            return
+
         # Data builder
         guild = message.guild
         channel = message.channel
