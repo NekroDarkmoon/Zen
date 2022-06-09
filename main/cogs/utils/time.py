@@ -95,12 +95,32 @@ class HumanTime:
     async def convert(cls, ctx: Context, argument: str) -> Self:
         return cls(argument, now=ctx.message.created_at)
 
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Imports
+#                          Time
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class Time(HumanTime):
+    def __init__(
+        self, argument: str, *, now: Optional[datetime.datetime] = None
+    ) -> None:
+        try:
+            o = ShortTime(argument, now=now)
+        except Exception as e:
+            super().__init__(argument)
+        else:
+            self.dt = o.dt
+            self._past = False
+
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Imports
+#                        Future Time
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class FutureTime(HumanTime):
+    def __init__(self, argument: str, *, now: Optional[datetime.datetime] = None) -> None:
+        super().__init__(argument, now=now)
+
+        if self._past:
+            raise commands.BadArgument('this time is in the past.')
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
