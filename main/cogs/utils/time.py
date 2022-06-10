@@ -2,7 +2,6 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
-import datetime
 
 # Standard library imports
 import datetime
@@ -161,7 +160,122 @@ class FriendlyTimeResult:
 #                    User Friendly Time
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class UserFriendlyTime:
-    pass
+    """That way quotes aren't absolutely necessary."""
+    converter: commands.Converter
+    default: Any
+
+    __slots__ = ('converter', 'default')
+
+    def __init__(
+        self,
+        converter: Optional[type[commands.Converter]
+                            | commands.Converter] = None,
+        *,
+        default: Any = None
+    ) -> None:
+        if isinstance(converter, type) and issubclass(converter, commands.Converter):
+            converter = converter()
+
+        if converter is not None and not isinstance(converter, commands.Converter):
+            raise TypeError('commands.Converter subclass necessary.')
+
+        self.converter = converter
+        self.default = default
+
+    async def convert(self, ctx: Context, argument: str) -> FriendlyTimeResult:
+        try:
+            calendar = HumanTime.calendar
+            regex = ShortTime.compiled
+            now = ctx.message.created_at
+
+            match = regex.match(argument)
+
+            if match is not None and match.group(0):
+                data = {k: int(v)
+                        for k, v in match.groupdict(default=0).items()}
+                remaining = argument[match.end():].strip()
+                result = FriendlyTimeResult(now + relativedelta(**data))
+                await result.ensure_constraints(ctx, self, now, remaining)
+                return result
+
+            # Apparently nlp does not like "from now"
+            # It likes "from x" in other cases though so handle the 'now' case
+            if argument.endswith('from now'):
+                argument = argument[:-8].strip()
+
+            if argument[:2] == 'me':
+                if argument[:6] in ('me to ', 'me in ', 'me at '):
+                    argument = argument[6:]
+
+            elems = calendar.nlp(argument, sourceTime=now)
+            if elems is None or len(elems) == 0:
+                raise commands.BadArgument(INVALID_TIME)
+
+            # Handle the following cases:
+            # "date time" foo
+            # date time foo
+            # foo date time
+            dt, status, begin, end, dt_str = elems[0]
+
+            if not status.hasDateOrTime:
+                raise commands.BadArgument(INVALID_TIME)
+
+            if begin not in (0, 1) and end != len(argument):
+                raise commands.BadArgument(
+                    'Time is either in an inappropriate location, which '
+                    'must be either at the end or beginning of your input, '
+                    'or I just flat out did not understand what you meant. Sorry.'
+                )
+
+            # TODO: Convert to func
+            if not status.hasTime:
+                dt: datetime.datetime = dt.replace(
+                    hour=now.hour, minute=now.minute, second=now.second, microsecond=now.microsecond
+                )
+
+            if status.accuracy == pdt.pdtContext.ACU_HALFDAY:
+                dt = dt.replace(day=now.day+1)
+
+            result = FriendlyTimeResult(
+                dt.replace(tzinfo=datetime.timezone.utc))
+            remaining = ''
+
+            if begin in (0, 1):
+                if begin == 1:
+                    if argument[0] != '"':
+                        raise commands.BadArgument(
+                            'Expected quote before time input.')
+
+                    if not (end < len(argument) and argument[end] == '"'):
+                        raise commands.BadArgument(
+                            'If time is quoted, you mused end quote it.')
+
+                    remaining = argument[end + 1:].lstrip(',.!')
+
+                else:
+                    remaining = argument[end:].lstrip(' ,.!')
+
+            elif len(argument) == end:
+                remaining = argument[:begin].strip()
+
+            await result.ensure_constraints(ctx, self, now, remaining)
+            return result
+
+        except:
+            import traceback
+            traceback.print_exc()
+            raise
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                         Imports
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                         Imports
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                         Imports
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
