@@ -30,7 +30,7 @@ from discord.ext import menus
 
 
 # Local application imports
-from main.cogs.utils import cache, checks, db, time
+from main.cogs.utils import cache, checks, db, formats, time
 
 
 if TYPE_CHECKING:
@@ -309,7 +309,47 @@ class Reminder(commands.Cog):
         when: Annotated[time.FriendlyTimeResult, time.UserFriendlyTime(
             commands.clean_content, default='...')]
     ) -> None:
-        pass
+        """Reminds you of something after a certain amount of time.
+
+        The input can be any direct date (e.g. YYYY-MM-DD) or a human
+        readable offset. Examples:
+
+        - "next thursday at 3pm do something funny"
+        - "do the dishes tomorrow"
+        - "in 3 days do the thing"
+        - "2d unmute someone"
+
+        Times are in UTC.
+        """
+
+        # Call _remind to support both slash and message command
+        await self._remind(ctx, when=when)
+
+    @remind.command(name='remindme')
+    async def remindme(self, ctx: Context, msg: str) -> None:
+        """Reminds you of something after a certain amount of time."""
+        self._remind(ctx, when=msg)
+
+    async def _remind(
+        self,
+        ctx: Context,
+        when: Annotated[time.FriendlyTimeResult, time.UserFriendlyTime(
+            commands.clean_content, default='...')]
+    ) -> None:
+
+        timer = await self.create_timer(
+            when.dt,
+            'reminder',
+            ctx.author.id,
+            when.arg,
+            connection=ctx.db,
+            created=ctx.message.created_at,
+            message_id=ctx.message.id,
+        )
+
+        delta = time.human_timedelta(when.dt, source=timer.created_at)
+        await ctx.send(f'Alright {ctx.author.mention}, in {delta}: {when.arg}')
+
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
