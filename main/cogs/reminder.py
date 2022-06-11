@@ -350,6 +350,35 @@ class Reminder(commands.Cog):
         delta = time.human_timedelta(when.dt, source=timer.created_at)
         await ctx.send(f'Alright {ctx.author.mention}, in {delta}: {when.arg}')
 
+    @remind.command(name='clear')
+    async def reminder_clear(self, ctx: Context) -> None:
+        """Clears all reminders you have set."""
+        sql = """SELECT COUNT(*)
+                 FROM reminders
+                 WHERE event = 'reminder'
+                 AND extra #>> '{args,0}' = $1;
+              """
+
+        author_id = str(ctx.author.id)
+        total: asyncpg.Record = await ctx.db.fetchrow(sql, author_id)
+        total = total[0]
+        if total == 0:
+            return await ctx.send('`You do not have any reminders to delete.`')
+
+        # TODO: Convert to interaction
+        confirm = await ctx.prompt(f'Are you sure you want to delete {formats.Plural(total):reminder}?')
+        if not confirm:
+            return await ctx.send('Aborting')
+
+        sql = """DELETE FROM reminders WHERE event = 'reminder' AND extra #>> '{args,0}' = $1;"""
+        await ctx.db.execute(sql, author_id)
+
+        # Check if the current timer is the one being cleared and cancel it if so
+        if self._current_timer and self._current_timer.author_id == ctx.author.id:
+            self._task.cancel()
+            self._task = self.bot.loop.create_task(self.dispatch_timers())
+
+        await ctx.send(f'Successfully deleted {formats.Plural(total):reminder}.')
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
