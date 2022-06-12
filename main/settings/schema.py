@@ -46,7 +46,7 @@ tables: dict = {
     ''',
 
     'reminders': f'''
-        idx SERIAL PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         expires TIMESTAMP NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         event TEXT NOT NULL,
