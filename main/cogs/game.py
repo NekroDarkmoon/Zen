@@ -124,6 +124,7 @@ class Game(commands.Cog):
         new_overwrites = {
             member: discord.PermissionOverwrite(
                 read_messages=True,
+                send_messages=True,
                 manage_messages=True,
                 manage_threads=True,
                 mention_everyone=False,
