@@ -74,7 +74,7 @@ class DB:
             if old_init is not None:
                 await old_init(conn)
 
-        cls._pool = pool = await asyncpg.create_pool(uri, **kwargs)
+        cls._pool = pool = await asyncpg.create_pool(uri, init=init, **kwargs)
         log.info('Connected to db and acquired pool.')
 
         # Do db stuff
