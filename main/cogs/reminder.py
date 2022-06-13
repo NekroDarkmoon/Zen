@@ -104,8 +104,31 @@ class Timer:
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Setup
+#                         Pages
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class ReminderPagesSource(menus.ListPageSource):
+    async def format_page(self, menu, entries: list[asyncpg.Record]) -> discord.Embed:
+        for idx, (_id, expires, message) in enumerate(entries, start=menu.current_page * self.per_page):
+            shorten = textwrap.shorten(message, width=512)
+            menu.embed.add_field(
+                name=f'{_id}: {time.format_relative(expires) }',
+                value=shorten,
+                inline=False
+            )
+
+        maximum = self.get_max_pages()
+        if maximum > 1:
+            footer = f'Page {menu.current_page + 1}/{maximum} ({len(self.entries)} entries)'
+            menu.embed.set_footer(text=footer)
+
+        return menu.embed
+
+
+class ReminderPages(ZenPages):
+    def __init__(self, entries, *, ctx: Context, per_page: int = 12):
+        super().__init__(ReminderPagesSource(entries, per_page=per_page), ctx=ctx)
+        self.embed = discord.Embed(color=discord.Color.random())
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
