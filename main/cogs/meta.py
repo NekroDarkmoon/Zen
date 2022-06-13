@@ -16,6 +16,7 @@ import traceback
 
 from collections import Counter
 from typing import TYPE_CHECKING, Any, Optional, Union
+import asyncpg
 
 # Third party imports
 import discord
@@ -389,6 +390,18 @@ class Meta(commands.Cog):
         colour = user.colour
         if colour.value:
             e.colour = colour
+
+        sql = '''SELECT channel_id, last_msg FROM logger
+                 WHERE server_id=$1 AND user_id=$2
+              '''
+        record: asyncpg.Record = await self.bot.pool.fetchrow(
+            sql, ctx.guild.id, user.id
+        )
+
+        if record is not None:
+            val = f'{time.format_relative(record["last_msg"])}'
+            val += f' in {ctx.guild.get_channel(record["channel_id"]).mention}'
+            e.add_field(name='Last Message', value=val, inline=False)
 
         e.set_thumbnail(url=user.display_avatar.url)
 
