@@ -232,7 +232,8 @@ class Logging(commands.Cog):
         e = discord.Embed(
             title=f'{member.name}#{member.discriminator}', color=discord.Color.red())
         e.description = f':outbox_tray: {member.mention} **has left the guild.**'
-        e.set_thumbnail(url=member.avatar.url)
+        if member.display_avatar:
+            e.set_thumbnail(url=member.display_avatar)
         e.set_footer(text=f'ID: {member.id}')
         e.timestamp = datetime.now()
 
