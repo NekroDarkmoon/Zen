@@ -51,13 +51,13 @@ class Timer:
     __slots__ = ('args', 'kwargs', 'event', 'id', 'created_at', 'expires')
 
     def __init__(self, *, record: asyncpg.Record) -> None:
-        self.id = record.id['id']
+        self.id = record['id']
 
         extra = record['extra']
         self.args: Sequence[Any] = extra.get('args', [])
         self.kwargs: dict[str, Any] = extra.get('kwargs', [])
         self.event: str = record['event']
-        self.created_at: datetime.datetime = record['created']
+        self.created_at: datetime.datetime = record['created_at']
         self.expires: datetime.datetime = record['expires']
 
     @property
@@ -75,7 +75,7 @@ class Timer:
         cls,
         *,
         expires: datetime.datetime,
-        created: datetime.datetime,
+        created_at: datetime.datetime,
         event: str,
         args: Sequence[Any],
         kwargs: dict[str, Any]
@@ -84,7 +84,7 @@ class Timer:
             'id': None,
             'extra': {'args': args, 'kwargs': kwargs},
             'event': event,
-            'created': created,
+            'created_at': created_at,
             'expires': expires,
         }
 
@@ -214,7 +214,7 @@ class Reminder(commands.Cog):
         connection: asyncpg.Connection
             Special keyword-only argument to use a specific connection
             for the DB request.
-        created: datetime.datetime
+        created_at: datetime.datetime
             Special keyword-only argument to use as the creation time.
             Should make the timedeltas a bit more consistent.
 
@@ -235,7 +235,7 @@ class Reminder(commands.Cog):
             connection = self.bot.pool
 
         try:
-            now = kwargs.pop('created')
+            now = kwargs.pop('created_at')
         except KeyError:
             now = discord.utils.utcnow()
 
@@ -244,7 +244,7 @@ class Reminder(commands.Cog):
         now = now.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
         timer = Timer.temp(event=event, args=args,
-                           kwargs=kwargs, expires=when, created=now)
+                           kwargs=kwargs, expires=when, created_at=now)
         delta = (when - now).total_seconds()
 
         if delta <= 120:
@@ -252,8 +252,8 @@ class Reminder(commands.Cog):
                 self.short_timer_optimization(delta, timer))
             return timer
 
-        sql = '''INSERT INTO reminders (event, extra, expires, created)
-                 VALUES ($1, $2, $3, $4)
+        sql = '''INSERT INTO reminders (event, extra, expires, created_at)
+                 VALUES ($1, $2::jsonb, $3, $4)
                  RETURNING id
               '''
 
@@ -333,6 +333,7 @@ class Reminder(commands.Cog):
     async def _remind(
         self,
         ctx: Context,
+        *,
         when: Annotated[time.FriendlyTimeResult, time.UserFriendlyTime(
             commands.clean_content, default='...')]
     ) -> None:
@@ -341,9 +342,10 @@ class Reminder(commands.Cog):
             when.dt,
             'reminder',
             ctx.author.id,
+            ctx.channel.id,
             when.arg,
             connection=ctx.db,
-            created=ctx.message.created_at,
+            created_at=ctx.message.created_at,
             message_id=ctx.message.id,
         )
 
@@ -351,6 +353,7 @@ class Reminder(commands.Cog):
         await ctx.send(f'Alright {ctx.author.mention}, in {delta}: {when.arg}')
 
     @remind.command(name='delete')
+    @app_commands.describe(id='Reminder id')
     async def reminder_delete(self, ctx: Context, id: int) -> None:
         """Deletes a reminder by its ID.
 
