@@ -5,37 +5,30 @@
 from __future__ import annotations
 
 # Standard library imports
-import argparse
-from email.policy import default
-from multiprocessing import connection
-from multiprocessing.connection import Connection
-import shlex
-from threading import Thread
-import asyncpg
 import asyncio
+import asyncpg
 import datetime
-import enum
 import logging
-import re
+import textwrap
 
-from collections import Counter, defaultdict
-from typing import TYPE_CHECKING, Any, Callable, MutableMapping, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 from typing_extensions import Annotated
 
 # Third party imports
 import discord
-from discord import TextChannel, app_commands
-from discord.ext import commands, tasks
+from discord import app_commands
+from discord.ext import commands
 from discord.ext import menus
 
 
 # Local application imports
-from main.cogs.utils import cache, checks, db, formats, time
+from main.cogs.utils import db, formats, time
+from main.cogs.utils.paginator import ZenPages
 
 
 if TYPE_CHECKING:
     from typing_extensions import Self
-    from utils.context import Context, GuildContext
+    from utils.context import Context
     from main.Zen import Zen
 
 
