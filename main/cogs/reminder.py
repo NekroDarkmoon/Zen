@@ -352,6 +352,29 @@ class Reminder(commands.Cog):
         delta = time.human_timedelta(when.dt, source=timer.created_at)
         await ctx.send(f'Alright {ctx.author.mention}, in {delta}: {when.arg}')
 
+    @remind.command(name='list')
+    async def reminder_list(self, ctx: Context) -> None:
+        """Shows currently running reminders."""
+        sql = """SELECT id, expires, extra #>> '{args, 2}'
+                 FROM reminders
+                 WHERE event = 'reminder'
+                 AND extra #>> '{args, 0}' = $1
+                 ORDER BY expires
+              """
+
+        records = await ctx.db.fetch(sql, str(ctx.author.id))
+
+        if len(records) == 0:
+            return await ctx.send('`No currently running reminders.`')
+
+        e = discord.Embed(title='Reminders', color=discord.Colour.random())
+
+        # Add Paginator
+        p = ReminderPages(entries=records, per_page=10, ctx=ctx)
+        p.embed.set_author(name=ctx.author.display_name)
+        p.embed.set_thumbnail(url=ctx.author.display_avatar)
+        await p.start()
+
     @remind.command(name='delete')
     @app_commands.describe(id='Reminder id')
     async def reminder_delete(self, ctx: Context, id: int) -> None:
