@@ -117,7 +117,7 @@ class Rep(commands.Cog):
         channel = message.channel
         users = [u for u in message.mentions if u.id !=
                  author.id and not u.bot]
-        now = datetime.now()
+        now = discord.utils.utcnow()
 
         if len(users) == 0:
             return
@@ -216,7 +216,7 @@ class Rep(commands.Cog):
         guild = reaction.message.guild
         channel = reaction.message.channel
         conn = self.bot.pool
-        now = datetime.now()
+        now = discord.utils.utcnow()
 
         # Validation
         if channel.id in await self._get_excluded_channels(guild.id) or author.bot:
@@ -264,7 +264,7 @@ class Rep(commands.Cog):
         guild = reaction.message.guild
         channel = reaction.message.channel
         conn = self.bot.pool
-        now = datetime.now()
+        now = discord.utils.utcnow()
 
         # Validation
         if channel.id in await self._get_excluded_channels(guild.id) or author.bot:
@@ -383,7 +383,7 @@ class Rep(commands.Cog):
 
         # Data builder
         conn = self.bot.pool
-        now = datetime.now()
+        now = discord.utils.utcnow()
         guild = interaction.guild
         author = interaction.user
         message = await interaction.original_message()

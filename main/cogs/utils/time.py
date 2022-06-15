@@ -6,6 +6,7 @@ from __future__ import annotations
 # Standard library imports
 import datetime
 import logging
+import discord
 import parsedatetime as pdt
 import re
 
@@ -55,7 +56,7 @@ class ShortTime:
             raise commands.BadArgument('invalid time provided.')
 
         data = {k: int(v) for k, v in match.groupdict(default=0).items()}
-        now = now or datetime.datetime.utcnow()
+        now = now or discord.utils.utcnow()
         self.dt: datetime.datetime = now + relativedelta(**data)
 
         @classmethod
@@ -75,7 +76,7 @@ class HumanTime:
         *,
         now: Optional[datetime.datetime] = None
     ) -> None:
-        now = now or datetime.datetime.utcnow()
+        now = now or discord.utils.utcnow()
         dt, status = self.calendar.parseDT(argument, sourceTime=now)
 
         if not status.hasDateOrTime:

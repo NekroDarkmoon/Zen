@@ -66,6 +66,7 @@ class XP(commands.Cog):
         author = message.author
         xp: int = 0
         pre_level: int = 0
+        now = discord.utils.utcnow()
 
         try:
             # Time Validation
@@ -74,7 +75,7 @@ class XP(commands.Cog):
 
             if res is not None:
                 elapsed_time: datetime = res['last_xp']
-                if (datetime.now() - elapsed_time).total_seconds() < 60:
+                if (now - elapsed_time).total_seconds() < 60:
                     return
                 xp = res['xp']
                 pre_level = res['level']
@@ -90,8 +91,8 @@ class XP(commands.Cog):
                      DO UPDATE SET xp=$3,
                                    level=$4,
                                    last_xp=$5
-            '''
-            await conn.execute(sql, guild.id, author.id, xp, level, datetime.now())
+                  '''
+            await conn.execute(sql, guild.id, author.id, xp, level, now)
 
             # Emit event for level up
             if (level > pre_level):

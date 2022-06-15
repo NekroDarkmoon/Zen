@@ -172,7 +172,7 @@ class Exandria(commands.Cog):
     async def start_theme(self, ctx: Context, region: str) -> None:
         # Create content
         separator = '```\n.' + ('\n' * 50) + '.\n```'
-        month = datetime.datetime.now().strftime('%B %Y')
+        month = discord.utils.utcnow().strftime('%B %Y')
         content = f"`Month of {month} - Region {region.upper()}`\n"
         content += f"`Map -->` https://media.discordapp.net/attachments/725862865176625254/946156671405809754/exandria_themed_space.png"
         content += '\n`For event information check` --> <#970866227935334450>'

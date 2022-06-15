@@ -194,7 +194,7 @@ class Reminder(commands.Cog):
                 # so we're gonna cap it off at 40 days
                 # see: http://bugs.python.org/issue20493
                 timer = self._current_timer = await self.wait_for_active_timers(days=40)
-                now = datetime.datetime.utcnow()
+                now = discord.utils.utcnow()
 
                 if timer.expires >= now:
                     to_sleep = (timer.expires - now).total_seconds()
