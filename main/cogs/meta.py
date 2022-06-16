@@ -10,9 +10,6 @@ import datetime
 import logging
 import inspect
 import itertools
-import os
-import sys
-import traceback
 
 from collections import Counter
 from typing import TYPE_CHECKING, Any, Optional, Union
@@ -403,7 +400,8 @@ class Meta(commands.Cog):
             val += f' in {ctx.guild.get_channel(record["channel_id"]).mention}'
             e.add_field(name='Last Message', value=val, inline=False)
 
-        e.set_thumbnail(url=user.display_avatar.url)
+        if user.display_avatar:
+            e.set_thumbnail(url=user.display_avatar)
 
         if isinstance(user, discord.User):
             e.set_footer(text='This member is not in this server.')

@@ -7,10 +7,9 @@ from __future__ import annotations
 from datetime import datetime
 from email import message
 import logging
-import random
 import re
 
-from typing import TYPE_CHECKING, Literal, Optional, TypedDict
+from typing import TYPE_CHECKING, Optional, TypedDict
 
 # Third party imports
 import discord  # noqa

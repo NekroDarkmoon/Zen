@@ -4,11 +4,10 @@
 from __future__ import annotations
 
 # Standard library imports
-from datetime import datetime
 import logging
 import re
 
-from typing import TYPE_CHECKING, Any, Optional, TypedDict
+from typing import TYPE_CHECKING, Optional
 from unicodedata import category
 
 # Third party imports
@@ -20,8 +19,6 @@ from discord.ext.commands.view import StringView
 
 
 # Local application imports
-from main.cogs.utils.paginator import TabularPages
-
 if TYPE_CHECKING:
     from main.Zen import Zen
     from main.cogs.utils.context import Context

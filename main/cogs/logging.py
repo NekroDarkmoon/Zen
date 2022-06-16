@@ -2,8 +2,6 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
-from datetime import datetime
-from email import message
 
 # Standard library imports
 import logging
@@ -73,7 +71,6 @@ class Logging(commands.Cog):
 
     # --------------------------------------------------
     #                  Message delete
-
     @commands.Cog.listener(name='on_message_delete')
     async def on_message_delete(self, msg: discord.Message) -> None:
         if msg.guild is None:
@@ -288,7 +285,6 @@ class Logging(commands.Cog):
 
     # --------------------------------------------------
     #                  Get Logging Channel
-
     @alru_cache(maxsize=128)
     async def _get_logging_channel(self, server_id: int) -> Optional[int]:
         # Get pool

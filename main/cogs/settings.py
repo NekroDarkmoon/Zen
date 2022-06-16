@@ -2,7 +2,6 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
-from dis import disco
 
 # Standard library imports
 import logging

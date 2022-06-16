@@ -9,7 +9,7 @@ import logging
 import random
 import re
 
-from typing import TYPE_CHECKING, Optional, TypedDict
+from typing import TYPE_CHECKING, Optional
 
 # Third party imports
 import discord  # noqa

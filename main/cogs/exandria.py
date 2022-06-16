@@ -2,18 +2,16 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 from __future__ import annotations
 import asyncio
 
 # Standard library imports
-import datetime
 import logging
 import random
 import re
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING
 
 
 # Third party imports
@@ -23,9 +21,8 @@ from discord.ext import commands
 
 # Local application imports
 from main.settings import config
-from main.cogs.utils import checks
 from main.cogs.utils.config import Config
-from main.cogs.utils.context import Context, GuildContext
+from main.cogs.utils.context import Context
 
 
 if TYPE_CHECKING:

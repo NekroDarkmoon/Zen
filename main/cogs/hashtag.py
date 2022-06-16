@@ -5,13 +5,11 @@
 
 from __future__ import annotations
 import re
-from secrets import choice
-from xmlrpc.client import boolean
 
 # Standard library imports
 import logging
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING
 
 # Third party imports
 import discord
@@ -19,10 +17,8 @@ from async_lru import alru_cache
 from discord import app_commands
 from discord.ext import commands
 
-
 # Local application imports
 from main.cogs.utils.context import Context
-
 
 if TYPE_CHECKING:
     from main.Zen import Zen
@@ -90,7 +86,7 @@ class Hashtag(commands.Cog):
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel,
-        enable: boolean
+        enable: bool
     ) -> None:
         """ Require content posted in a channel to have hashtags. """
         # Defer

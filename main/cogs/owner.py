@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, Mapping, Op
 
 # Third party imports
 import discord
-from discord import app_commands
 from discord.ext import commands
 
 # Local application imports
@@ -87,7 +86,6 @@ class Owner(commands.Cog):
 
     # -------------------------------------------------------
     #                     Commands
-
     @commands.command(hidden=True)
     async def load(self, ctx: Context, *, cog: str) -> None:
         """Loads a Cog"""
