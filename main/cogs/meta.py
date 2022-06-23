@@ -25,7 +25,7 @@ from discord.ext import menus
 # Local application imports
 from main.cogs.utils import formats, time
 from main.cogs.utils.context import Context, GuildContext
-from main.cogs.utils.paginator import ZenPages
+from main.cogs.utils.paginator import TabularPages, ZenPages
 
 
 if TYPE_CHECKING:
@@ -550,13 +550,35 @@ class Meta(commands.Cog):
     async def role_info(
         self, ctx: GuildContext, role: discord.Role
     ) -> None:
-        pass
+        """ Get information on a role."""
+        # Data builder
+
+        idx = role.id
+        members = role.members
+        count = len(members)
+        data = [{'Member': m.display_name} for m in members]
+
+        p = TabularPages(
+            entries=data, ctx=ctx, headers='keys'
+        )
+
+        p.embed.title = f'{role.name} - {idx}'
+        p.embed.colour = role.color
+        p.embed.add_field(name='Member Count',
+                          value=f'`{count}`', inline=False)
+        p.embed.set_author(name=ctx.author.display_name)
+        await p.start()
 
     @info.command('channel')
     @app_commands.describe(channel='Selected Channel')
     async def channel_info(
         self, ctx: GuildContext, channel: GuildChannel
     ) -> None:
+        """ Get Information about a channel"""
+        # Data builder
+        idx = channel.id
+        view_perms = channel.overwrites
+
         pass
 
     @info.command('permissions')
