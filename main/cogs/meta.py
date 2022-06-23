@@ -579,9 +579,17 @@ class Meta(commands.Cog):
         e = discord.Embed(title='Message Preview',
                           colour=discord.Colour.random())
         e.description = message.content
+
+        for a in message.attachments:
+            e.add_field(name='Attachment', value=a, inline=False)
+
+        if len(message.attachments) == 1:
+            e.set_image(url=message.attachments[0])
+
         e.url = message.to_reference().jump_url
         e.timestamp = discord.utils.utcnow()
-
+        e.set_author(name=message.author,
+                     icon_url=message.author.display_avatar)
         await ctx.send(embed=e)
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import

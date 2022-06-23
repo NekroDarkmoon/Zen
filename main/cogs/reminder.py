@@ -153,23 +153,16 @@ class Reminder(commands.Cog):
 
     # ********************************************************
     #                      Timer Functions
-    async def get_active_timer(
-        self, *, connection: Optional[asyncpg.Connection] = None, days: int = 7
-    ) -> Optional[Timer]:
-        # Data builder
-        conn = connection or self.bot.pool
+    async def get_active_timer(self, *, connection: Optional[asyncpg.Connection] = None, days: int = 7) -> Optional[Timer]:
+        query = "SELECT * FROM reminders WHERE expires < (CURRENT_DATE + $1::interval) ORDER BY expires LIMIT 1;"
+        con = connection or self.bot.pool
 
-        sql = '''SELECT * FROM reminders WHERE expires < (CURRENT_DATE + $1::interval)
-                 ORDER BY expires LIMIT 1'''
-        res = await conn.fetchrow(sql, datetime.timedelta(days=days))
+        record = await con.fetchrow(query, datetime.timedelta(days=days))
+        return Timer(record=record) if record else None
 
-        return Timer(record=res) if res else None
-
-    async def wait_for_active_timers(
-        self, *, connection: Optional[asyncpg.Connection] = None, days: int = 7
-    ):
-        async with db.MaybeAcquire(connection=connection, pool=self.bot.pool) as conn:
-            timer = await self.get_active_timer(connection=conn, days=days)
+    async def wait_for_active_timers(self, *, connection: Optional[asyncpg.Connection] = None, days: int = 7) -> Timer:
+        async with db.MaybeAcquire(connection=connection, pool=self.bot.pool) as con:
+            timer = await self.get_active_timer(connection=con, days=days)
             if timer is not None:
                 self._have_data.set()
                 return timer
@@ -178,12 +171,16 @@ class Reminder(commands.Cog):
             self._current_timer = None
             await self._have_data.wait()
 
-            return await self.get_active_timer(connection=conn, days=days)
+            # At this point we always have data
+            # type: ignore
+            return await self.get_active_timer(connection=con, days=days)
 
     async def call_timer(self, timer: Timer) -> None:
-        sql = '''DELETE FROM reminders WHERE id=$1'''
-        await self.bot.pool.execute(sql, timer.id)
+        # delete the timer
+        query = "DELETE FROM reminders WHERE id=$1;"
+        await self.bot.pool.execute(query, timer.id)
 
+        # dispatch the event
         event_name = f'{timer.event}_timer_complete'
         self.bot.dispatch(event_name, timer)
 
@@ -201,21 +198,19 @@ class Reminder(commands.Cog):
                     await asyncio.sleep(to_sleep)
 
                 await self.call_timer(timer)
-
         except asyncio.CancelledError:
             raise
         except (OSError, discord.ConnectionClosed, asyncpg.PostgresConnectionError):
             self._task.cancel()
             self._task = self.bot.loop.create_task(self.dispatch_timers())
 
-    async def short_timer_optimization(self, seconds: int, timer: Timer) -> None:
+    async def short_timer_optimisation(self, seconds: int, timer: Timer) -> None:
         await asyncio.sleep(seconds)
         event_name = f'{timer.event}_timer_complete'
         self.bot.dispatch(event_name, timer)
 
     async def create_timer(self, *args: Any, **kwargs: Any) -> Timer:
         r"""Creates a timer.
-
         Parameters
         -----------
         when: datetime.datetime
@@ -233,17 +228,14 @@ class Reminder(commands.Cog):
         created_at: datetime.datetime
             Special keyword-only argument to use as the creation time.
             Should make the timedeltas a bit more consistent.
-
         Note
         ------
         Arguments and keyword arguments must be JSON serialisable.
-
         Returns
         --------
         :class:`Timer`
         """
-
-        when, event, *args = args
+        when, event, *args = args  # type: ignore
 
         try:
             connection = kwargs.pop('connection')
@@ -253,35 +245,36 @@ class Reminder(commands.Cog):
         try:
             now = kwargs.pop('created_at')
         except KeyError:
-            now = datetime.datetime.utcnow()
+            now = discord.utils.utcnow()
 
-        when: datetime.datetime = when.astimezone(
-            datetime.timezone.utc).replace(tzinfo=None)
+        # Remove timezone information since the database does not deal with it
+        when = when.astimezone(datetime.timezone.utc).replace(tzinfo=None)
         now = now.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
         timer = Timer.temp(event=event, args=args,
                            kwargs=kwargs, expires=when, created_at=now)
         delta = (when - now).total_seconds()
-
-        if delta <= 120:
+        if delta <= 5:
+            # a shortcut for small timers
             self.bot.loop.create_task(
-                self.short_timer_optimization(delta, timer))
+                self.short_timer_optimisation(delta, timer))
             return timer
 
-        sql = '''INSERT INTO reminders (event, extra, expires, created_at)
-                 VALUES ($1, $2::jsonb, $3, $4)
-                 RETURNING id
-              '''
+        query = """INSERT INTO reminders (event, extra, expires, created_at)
+                   VALUES ($1, $2::jsonb, $3, $4)
+                   RETURNING id;
+                """
 
-        res = await connection.fetchrow(sql, event, {'args': args, 'kwargs': kwargs}, when, now)
-        timer.id = res[0]
+        row = await connection.fetchrow(query, event, {'args': args, 'kwargs': kwargs}, when, now)
+        timer.id = row[0]
 
-        # Only set the data check if it can be waited on
-        if delta <= (86400 * 40):  # 40 Days
+        # only set the data check if it can be waited on
+        if delta <= (86400 * 40):  # 40 days
             self._have_data.set()
 
-        # Check if this timer is earlier than our currently run timer
+        # check if this timer is earlier than our currently run timer
         if self._current_timer and when < self._current_timer.expires:
+            # cancel the task and re-run it
             self._task.cancel()
             self._task = self.bot.loop.create_task(self.dispatch_timers())
 
@@ -289,6 +282,7 @@ class Reminder(commands.Cog):
 
     @commands.Cog.listener()
     async def on_reminder_timer_complete(self, timer: Timer) -> None:
+        print('here')
         author_id, channel_id, message = timer.args
 
         try:
@@ -342,9 +336,14 @@ class Reminder(commands.Cog):
         await self._remind(ctx, when=when)
 
     @remind.command(name='remindme')
-    async def remindme(self, ctx: Context, msg: str) -> None:
+    async def remindme(
+            self,
+            ctx: Context,
+            msg: Annotated[time.FriendlyTimeResult, time.UserFriendlyTime(
+            commands.clean_content, default='...')]
+    ) -> None:
         """Reminds you of something after a certain amount of time."""
-        self._remind(ctx, when=msg)
+        await self._remind(ctx, when=msg)
 
     async def _remind(
         self,
