@@ -194,7 +194,7 @@ class Reminder(commands.Cog):
                 # so we're gonna cap it off at 40 days
                 # see: http://bugs.python.org/issue20493
                 timer = self._current_timer = await self.wait_for_active_timers(days=40)
-                now = discord.utils.utcnow()
+                now = datetime.datetime.utcnow()
 
                 if timer.expires >= now:
                     to_sleep = (timer.expires - now).total_seconds()
@@ -253,7 +253,7 @@ class Reminder(commands.Cog):
         try:
             now = kwargs.pop('created_at')
         except KeyError:
-            now = discord.utils.utcnow()
+            now = datetime.datetime.utcnow()
 
         when: datetime.datetime = when.astimezone(
             datetime.timezone.utc).replace(tzinfo=None)

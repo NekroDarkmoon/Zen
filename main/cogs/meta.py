@@ -568,6 +568,21 @@ class Meta(commands.Cog):
         channel: Optional[GuildChannel] = None
     ) -> None:
         pass
+
+    @commands.hybrid_command(name='preview')
+    @app_commands.describe(message='Message to preview')
+    async def message_preview(self, ctx: GuildContext, message: discord.Message) -> None:
+        """ Generate a preview of a message. 
+
+            Can take links and ids.
+        """
+        e = discord.Embed(title='Message Preview',
+                          colour=discord.Colour.random())
+        e.description = message.content
+        e.url = message.to_reference().jump_url
+        e.timestamp = discord.utils.utcnow()
+
+        await ctx.send(embed=e)
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

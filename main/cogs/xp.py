@@ -66,7 +66,7 @@ class XP(commands.Cog):
         author = message.author
         xp: int = 0
         pre_level: int = 0
-        now = discord.utils.utcnow()
+        now = datetime.utcnow()
 
         try:
             # Time Validation

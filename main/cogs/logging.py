@@ -2,6 +2,7 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
+from datetime import datetime
 
 # Standard library imports
 import logging
@@ -65,7 +66,7 @@ class Logging(commands.Cog):
                                    last_msg=$4,
                                    msg_count=logger.msg_count + $5
             '''
-            await conn.execute(sql, guild, member, channel, discord.utils.utcnow(), 1)
+            await conn.execute(sql, guild, member, channel, datetime.utcnow(), 1)
         except Exception:
             log.error('Error while logging message.', exc_info=True)
 

@@ -15,7 +15,7 @@ import logging
 import re
 
 from collections import Counter, defaultdict
-from typing import TYPE_CHECKING, Any, Callable, MutableMapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, MutableMapping, Optional
 from typing_extensions import Annotated
 
 # Third party imports
