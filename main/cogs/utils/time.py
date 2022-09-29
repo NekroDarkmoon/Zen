@@ -56,7 +56,7 @@ class ShortTime:
             raise commands.BadArgument('invalid time provided.')
 
         data = {k: int(v) for k, v in match.groupdict(default=0).items()}
-        now = now or discord.utils.utcnow()
+        now = now or datetime.datetime.utcnow()
         self.dt: datetime.datetime = now + relativedelta(**data)
 
         @classmethod
@@ -76,7 +76,7 @@ class HumanTime:
         *,
         now: Optional[datetime.datetime] = None
     ) -> None:
-        now = now or discord.utils.utcnow()
+        now = now or datetime.datetime.utcnow()
         dt, status = self.calendar.parseDT(argument, sourceTime=now)
 
         if not status.hasDateOrTime:
