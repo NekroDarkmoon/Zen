@@ -1,35 +1,156 @@
-from typing import Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Callable, Generic, Iterable, Protocol, TypeVar, Union, Optional
 from discord.ext import commands
 import asyncio
 import discord
 import io
 
 
-class _ContextDBAcquire:
-    __slots__ = ('ctx', 'timeout')
+if TYPE_CHECKING:
+    from main.Zen import Zen
+    from aiohttp import ClientSession
+    from asyncpg import Pool, Connection
+    from types import TracebackType
 
-    def __init__(self, ctx, timeout):
-        self.ctx = ctx
-        self.timeout = timeout
 
-    def __await__(self):
-        return self.ctx._acquire(self.timeout).__await__()
+T = TypeVar('T')
 
-    async def __aenter__(self):
-        await self.ctx._acquire(self.timeout)
-        return self.ctx.db
 
-    async def __aexit__(self, *args):
-        await self.ctx.release()
+# For typing purposes, `Context.db` returns a Protocol type
+# that allows us to properly type the return values via narrowing
+# Right now, asyncpg is untyped so this is better than the current status quo
+# To actually receive the regular Pool type `Context.pool` can be used instead.
+
+
+class ConnectionContextManager(Protocol):
+    async def __aenter__(self) -> Connection:
+        ...
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        ...
+
+
+class DatabaseProtocol(Protocol):
+    async def execute(self, query: str, *args: Any, timeout: Optional[float] = None) -> str:
+        ...
+
+    async def fetch(self, query: str, *args: Any, timeout: Optional[float] = None) -> list[Any]:
+        ...
+
+    async def fetchrow(self, query: str, *args: Any, timeout: Optional[float] = None) -> Optional[Any]:
+        ...
+
+    def acquire(self, *, timeout: Optional[float] = None) -> ConnectionContextManager:
+        ...
+
+    def release(self, connection: Connection) -> None:
+        ...
+
+
+class ConfirmationView(discord.ui.View):
+    def __init__(self, *, timeout: float, author_id: int, delete_after: bool) -> None:
+        super().__init__(timeout=timeout)
+        self.value: Optional[bool] = None
+        self.delete_after: bool = delete_after
+        self.author_id: int = author_id
+        self.message: Optional[discord.Message] = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user and interaction.user.id == self.author_id:
+            return True
+        else:
+            await interaction.response.send_message('This confirmation dialog is not for you.', ephemeral=True)
+            return False
+
+    async def on_timeout(self) -> None:
+        if self.delete_after and self.message:
+            if not self.message.flags.ephemeral:
+                await self.message.delete()
+            else:
+                await self.message.edit(view=None, content='This is safe to dismiss now.')
+
+    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        await interaction.response.defer()
+        if self.delete_after and self.message:
+            if not self.message.flags.ephemeral:
+                await interaction.delete_original_response()
+            else:
+                await interaction.edit_original_response(view=None, content='This is safe to dismiss now.')
+
+        self.stop()
+
+    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        await interaction.response.defer()
+        if self.delete_after and self.message:
+            if not self.message.flags.ephemeral:
+                await interaction.delete_original_response()
+            else:
+                await interaction.edit_original_response(view=None, content='This is safe to dismiss now.')
+
+        self.stop()
+
+
+class DisambiguatorView(discord.ui.View, Generic[T]):
+    message: discord.Message
+    selected: T
+
+    def __init__(self, ctx: Context, data: list[T], entry: Callable[[T], Any]):
+        super().__init__()
+        self.ctx: Context = ctx
+        self.data: list[T] = data
+
+        options = []
+        for i, x in enumerate(data):
+            opt = entry(x)
+            if not isinstance(opt, discord.SelectOption):
+                opt = discord.SelectOption(label=str(opt))
+            opt.value = str(i)
+            options.append(opt)
+
+        select = discord.ui.Select(options=options)
+
+        select.callback = self.on_select_submit
+        self.select = select
+        self.add_item(select)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message('This select menu is not meant for you, sorry.', ephemeral=True)
+            return False
+        return True
+
+    async def on_select_submit(self, interaction: discord.Interaction):
+        index = int(self.select.values[0])
+        self.selected = self.data[index]
+        await interaction.response.defer()
+        if not self.message.flags.ephemeral:
+            await self.message.delete()
+
+        self.stop()
 
 
 class Context(commands.Context):
+    channel: Union[discord.VoiceChannel, discord.TextChannel,
+                   discord.Thread, discord.DMChannel]
+    prefix: str
+    command: commands.Command[Any, ..., Any]
+    bot: Zen
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.pool = self.bot.pool
-        self._db = None
+        self.pool: Pool = self.bot.pool
 
-    async def entry_to_code(self, entries):
+    async def entry_to_code(self, entries: Iterable[tuple[str, str]]) -> None:
         width = max(len(a) for a, b in entries)
         output = ['```']
         for name, entry in entries:
@@ -37,7 +158,7 @@ class Context(commands.Context):
         output.append('```')
         await self.send('\n'.join(output))
 
-    async def indented_entry_to_code(self, entries):
+    async def indented_entry_to_code(self, entries: Iterable[tuple[str, str]]) -> None:
         width = max(len(a) for a, b in entries)
         output = ['```']
         for name, entry in entries:
@@ -45,55 +166,53 @@ class Context(commands.Context):
         output.append('```')
         await self.send('\n'.join(output))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         # we need this for our cache key strategy
         return '<Context>'
 
     @property
-    def session(self):
+    def session(self) -> ClientSession:
         return self.bot.session
 
     @discord.utils.cached_property
-    def replied_reference(self):
+    def replied_reference(self) -> Optional[discord.MessageReference]:
         ref = self.message.reference
         if ref and isinstance(ref.resolved, discord.Message):
             return ref.resolved.to_reference()
         return None
 
-    async def disambiguate(self, matches, entry):
+    @discord.utils.cached_property
+    def replied_message(self) -> Optional[discord.Message]:
+        ref = self.message.reference
+        if ref and isinstance(ref.resolved, discord.Message):
+            return ref.resolved
+        return None
+
+    async def disambiguate(self, matches: list[T], entry: Callable[[T], Any], *, ephemeral: bool = False) -> T:
         if len(matches) == 0:
             raise ValueError('No results found.')
 
         if len(matches) == 1:
             return matches[0]
 
-        await self.send('There are too many matches... Which one did you mean? **Only say the number**.')
-        await self.send('\n'.join(f'{index}: {entry(item)}' for index, item in enumerate(matches, 1)))
+        if len(matches) > 25:
+            raise ValueError('Too many results... sorry.')
 
-        def check(m):
-            return m.content.isdigit() and m.author.id == self.author.id and m.channel.id == self.channel.id
+        view = DisambiguatorView(self, matches, entry)
+        view.message = await self.send(
+            'There are too many matches... Which one did you mean?', view=view, ephemeral=ephemeral
+        )
+        await view.wait()
+        return view.selected
 
-        await self.release()
-
-        # only give them 3 tries.
-        try:
-            for i in range(3):
-                try:
-                    message = await self.bot.wait_for('message', check=check, timeout=30.0)
-                except asyncio.TimeoutError:
-                    raise ValueError('Took too long. Goodbye.')
-
-                index = int(message.content)
-                try:
-                    return matches[index - 1]
-                except:
-                    await self.send(f'Please give me a valid number. {2 - i} tries remaining...')
-
-            raise ValueError('Too many tries. Goodbye.')
-        finally:
-            await self.acquire()
-
-    async def prompt(self, message, *, timeout=60.0, delete_after=True, reacquire=True, author_id=None):
+    async def prompt(
+        self,
+        message: str,
+        *,
+        timeout: float = 60.0,
+        delete_after: bool = True,
+        author_id: Optional[int] = None,
+    ) -> Optional[bool]:
         """An interactive reaction confirmation dialog.
 
         Parameters
@@ -104,9 +223,6 @@ class Context(commands.Context):
             How long to wait before returning.
         delete_after: bool
             Whether to delete the confirmation message after we're done.
-        reacquire: bool
-            Whether to release the database connection and then acquire it
-            again when we're done.
         author_id: Optional[int]
             The member who should respond to the prompt. Defaults to the author of the
             Context's message.
@@ -119,54 +235,17 @@ class Context(commands.Context):
             ``None`` if deny due to timeout
         """
 
-        if not self.channel.permissions_for(self.me).add_reactions:
-            raise RuntimeError('Bot does not have Add Reactions permission.')
-
-        fmt = f'{message}\n\nReact with \N{WHITE HEAVY CHECK MARK} to confirm or \N{CROSS MARK} to deny.'
-
         author_id = author_id or self.author.id
-        msg = await self.send(fmt)
+        view = ConfirmationView(
+            timeout=timeout,
+            delete_after=delete_after,
+            author_id=author_id,
+        )
+        view.message = await self.send(message, view=view, ephemeral=delete_after)
+        await view.wait()
+        return view.value
 
-        confirm = None
-
-        def check(payload):
-            nonlocal confirm
-
-            if payload.message_id != msg.id or payload.user_id != author_id:
-                return False
-
-            codepoint = str(payload.emoji)
-
-            if codepoint == '\N{WHITE HEAVY CHECK MARK}':
-                confirm = True
-                return True
-            elif codepoint == '\N{CROSS MARK}':
-                confirm = False
-                return True
-
-            return False
-
-        for emoji in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}'):
-            await msg.add_reaction(emoji)
-
-        if reacquire:
-            await self.release()
-
-        try:
-            await self.bot.wait_for('raw_reaction_add', check=check, timeout=timeout)
-        except asyncio.TimeoutError:
-            confirm = None
-
-        try:
-            if reacquire:
-                await self.acquire()
-
-            if delete_after:
-                await msg.delete()
-        finally:
-            return confirm
-
-    def tick(self, opt, label=None):
+    def tick(self, opt: Optional[bool], label: Optional[str] = None) -> str:
         lookup = {
             True: '<:greenTick:330090705336664065>',
             False: '<:redTick:330090723011592193>',
@@ -178,46 +257,10 @@ class Context(commands.Context):
         return emoji
 
     @property
-    def db(self):
-        return self._db if self._db else self.pool
+    def db(self) -> DatabaseProtocol:
+        return self.pool  # type: ignore
 
-    async def _acquire(self, timeout):
-        if self._db is None:
-            self._db = await self.pool.acquire(timeout=timeout)
-        return self._db
-
-    def acquire(self, *, timeout=300.0):
-        """Acquires a database connection from the pool. e.g. ::
-
-            async with ctx.acquire():
-                await ctx.db.execute(...)
-
-        or: ::
-
-            await ctx.acquire()
-            try:
-                await ctx.db.execute(...)
-            finally:
-                await ctx.release()
-        """
-        return _ContextDBAcquire(self, timeout)
-
-    async def release(self):
-        """Releases the database connection from the pool.
-
-        Useful if needed for "long" interactive commands where
-        we want to release the connection and re-acquire later.
-
-        Otherwise, this is called automatically by the bot.
-        """
-        # from source digging asyncpg source, releasing an already
-        # released connection does nothing
-
-        if self._db is not None:
-            await self.bot.pool.release(self._db)
-            self._db = None
-
-    async def show_help(self, command=None):
+    async def show_help(self, command: Any = None) -> None:
         """Shows the help command for the specified command if given.
 
         If no command is given, then it'll show help for the current
@@ -225,9 +268,9 @@ class Context(commands.Context):
         """
         cmd = self.bot.get_command('help')
         command = command or self.command.qualified_name
-        await self.invoke(cmd, command=command)
+        await self.invoke(cmd, command=command)  # type: ignore
 
-    async def safe_send(self, content, *, escape_mentions=True, **kwargs):
+    async def safe_send(self, content: str, *, escape_mentions: bool = True, **kwargs) -> discord.Message:
         """Same as send except with some safe guards.
 
         1) If the message is too long then it sends a file with the results instead.
@@ -247,6 +290,6 @@ class Context(commands.Context):
 class GuildContext(Context):
     author: discord.Member
     guild: discord.Guild
-    channel: Union[discord.VoiceChannel, discord.TextChannel, discord.Thread]
+    channel: discord.VoiceChannel | discord.TextChannel | discord.Thread
     me: discord.Member
     prefix: str
