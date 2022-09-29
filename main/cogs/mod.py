@@ -234,7 +234,7 @@ class SpamChecker:
         return self._by_mentions
 
     def is_new(self, member: discord.Member) -> bool:
-        now = discord.utils.utcnow()
+        now = datetime.datetime.utcnow()
         seven_days_ago = now - datetime.timedelta(days=7)
         ninety_days_ago = now - datetime.timedelta(days=90)
         return member.created_at > ninety_days_ago and member.joined_at is not None and member.joined_at > seven_days_ago
@@ -269,7 +269,7 @@ class SpamChecker:
         return False
 
     def is_fast_join(self, member: discord.Member) -> bool:
-        joined = member.joined_at or discord.utils.utcnow()
+        joined = member.joined_at or datetime.datetime.utcnow()
         if self.last_join is None:
             self.last_join = joined
             return False
@@ -524,7 +524,7 @@ class Mod(commands.Cog):
         if not config.raid_mode:
             return
 
-        now = discord.utils.utcnow()
+        now = datetime.datetime.utcnow()
 
         is_new = member.created_at > (now - datetime.timedelta(days=7))
         checker = self._spam_check[guild_id]

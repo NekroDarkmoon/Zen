@@ -114,9 +114,9 @@ class TabularData:
 def format_dt(
         dt: datetime.datetime,
         style: Optional[str] = None,
-        to_utc: bool = True
+        add_tz: bool = True
 ) -> str:
-    if dt.tzinfo is None and to_utc:
+    if dt.tzinfo is None and add_tz:
         dt = dt.replace(tzinfo=datetime.timezone.utc)
 
     if style is None:

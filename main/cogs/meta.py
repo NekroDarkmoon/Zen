@@ -609,7 +609,7 @@ class Meta(commands.Cog):
             e.set_image(url=message.attachments[0])
 
         e.url = message.to_reference().jump_url
-        e.timestamp = discord.utils.utcnow()
+        e.timestamp = datetime.datetime.utcnow()
         e.set_author(name=message.author,
                      icon_url=message.author.display_avatar)
         await ctx.send(embed=e)

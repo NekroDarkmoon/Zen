@@ -66,7 +66,7 @@ class XP(commands.Cog):
         author = message.author
         xp: int = 0
         pre_level: int = 0
-        now = datetime.utcnow()
+        now = datetime.now()
 
         try:
             # Time Validation

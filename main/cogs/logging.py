@@ -209,7 +209,7 @@ class Logging(commands.Cog):
             before.id, 'blue'), inline=False)
         e.add_field(name='Old Nickname', value=old_nick)
         e.add_field(name='Old Nickname', value=new_nick)
-        e.timestamp = discord.utils.utcnow()
+        e.timestamp = datetime.utcnow()
 
         await log_channel.send(embed=e)
 
@@ -233,7 +233,7 @@ class Logging(commands.Cog):
         if member.display_avatar:
             e.set_thumbnail(url=member.display_avatar)
         e.set_footer(text=f'ID: {member.id}')
-        e.timestamp = discord.utils.utcnow()
+        e.timestamp = datetime.utcnow()
 
         await log_channel.send(embed=e)
 
@@ -255,7 +255,7 @@ class Logging(commands.Cog):
         e.description = f':outbox_tray: {user.mention} **has left the guild.**'
         e.set_thumbnail(url=user.avatar.url)
         e.set_footer(text=f'ID: {user.id}')
-        e.timestamp = discord.utils.utcnow()
+        e.timestamp = datetime.utcnow()
 
         await log_channel.send(embed=e)
 
@@ -277,7 +277,7 @@ class Logging(commands.Cog):
         e.description = f':outbox_tray: {user.mention} **has left the guild.**'
         e.set_thumbnail(url=user.avatar.url)
         e.set_footer(text=f'ID: {user.id}')
-        e.timestamp = discord.utils.utcnow()
+        e.timestamp = datetime.utcnow()
 
         await log_channel.send(embed=e)
 
