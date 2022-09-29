@@ -2,15 +2,18 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+from typing import Callable, TypeVar
 from discord.ext import commands
+from discord import app_commands
 
 from main.cogs.utils.context import GuildContext
+
+T = TypeVar('T')
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                       Async Checks
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 async def check_guild_permissions(ctx, perms, check=all):
     """Checks guild wide permissions for a user.
 
@@ -69,15 +72,38 @@ def has_guild_permissions(*, check=all, **perms: bool):
     return commands.check(pred)
 
 
-def is_mod():
-    async def pred(ctx: GuildContext) -> bool:
-        return await check_guild_permissions(ctx, {'manage_guild': True})
+# These do not take channel overrides into account
 
-    return commands.check(pred)
+def hybrid_permissions_check(**perms: bool) -> Callable[[T], T]:
+    async def pred(ctx: GuildContext):
+        return await check_guild_permissions(ctx, perms)
+
+    def decorator(func: T) -> T:
+        commands.check(pred)(func)
+        app_commands.default_permissions(**perms)(func)
+        return func
+
+    return decorator
+
+
+def is_manager():
+    return hybrid_permissions_check(manage_guild=True)
+
+
+def is_mod():
+    return hybrid_permissions_check(ban_members=True, manage_messages=True)
 
 
 def is_admin():
-    async def pred(ctx: GuildContext) -> bool:
-        return await check_guild_permissions(ctx, {'administrator': True})
+    return hybrid_permissions_check(administrator=True)
 
-    return commands.check(pred)
+
+def is_in_guilds(*guild_ids: int):
+    def predicate(ctx: GuildContext) -> bool:
+        guild = ctx.guild
+        if guild is None:
+            return False
+
+        return guild.id in guild_ids
+
+    return commands.check(predicate)
