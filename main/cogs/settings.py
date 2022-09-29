@@ -112,7 +112,7 @@ class Settings(commands.Cog):
         else:
             msg = 'Logging Channel Unset.'
 
-        await interaction.edit_original_message(content=msg)
+        await interaction.edit_original_response(content=msg)
 
     # __________________ Enable Leveling  _____________________
     @settings_group.command(name='enablexp')
@@ -150,7 +150,7 @@ class Settings(commands.Cog):
         else:
             msg = 'XP system is now disabled.'
 
-        await interaction.edit_original_message(content=msg)
+        await interaction.edit_original_response(content=msg)
 
     # _________________ Enable Reputation  _____________________
     @settings_group.command(name='enablerep')
@@ -188,7 +188,7 @@ class Settings(commands.Cog):
         else:
             msg = 'Rep system is now disabled.'
 
-        await interaction.edit_original_message(content=msg)
+        await interaction.edit_original_response(content=msg)
 
     # _____________ Exclude Channels Rep  _____________________
     @commands.command(name='excluderep')
@@ -303,7 +303,7 @@ class Settings(commands.Cog):
         else:
             msg = 'Game system is now disabled.'
 
-        await interaction.edit_original_message(content=msg)
+        await interaction.edit_original_response(content=msg)
 
     role_rewards_group = app_commands.Group(
         name='rewards',
@@ -344,7 +344,7 @@ class Settings(commands.Cog):
             await conn.execute(sql, guild.id, role.id, system.lower(), value)
 
             msg = f'`{role.name}` has been set as a reward for the `{system}` system.'
-            await interaction.edit_original_message(content=msg)
+            await interaction.edit_original_response(content=msg)
 
         except Exception:
             log.error('Error while setting role reward.', exc_info=True)
@@ -380,7 +380,7 @@ class Settings(commands.Cog):
             await conn.execute(sql, guild.id, role.id, system.lower())
 
             msg = f'`{role.name}` has been removed as a reward for the `{system}` system.'
-            await interaction.edit_original_message(content=msg)
+            await interaction.edit_original_response(content=msg)
 
         except Exception:
             log.error('Error while setting role reward.', exc_info=True)

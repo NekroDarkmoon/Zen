@@ -99,7 +99,7 @@ class Hashtag(commands.Cog):
 
         # Admin Check
         if not member.guild_permissions.administrator:
-            return await interaction.edit_original_message(
+            return await interaction.edit_original_response(
                 content='`Error: Insufficient permissions.`'
             )
 
@@ -118,14 +118,14 @@ class Hashtag(commands.Cog):
             await conn.execute(sql, guild.id, list(hashtags))
         except Exception:
             log.error('Error while updating hashtags.', exc_info=True)
-            return interaction.edit_original_message(content='Error')
+            return interaction.edit_original_response(content='Error')
 
         # Clear cache
         self._get_hashtags.cache_clear()
 
         state = 'now' if enable else 'no longer'
         msg = f'Channel {state} requires ` [ tag ] `.'
-        return await interaction.edit_original_message(content=msg)
+        return await interaction.edit_original_response(content=msg)
 
     # ______________________ Get Hashtags _______________________
     @alru_cache(maxsize=72)

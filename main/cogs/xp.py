@@ -154,7 +154,7 @@ class XP(commands.Cog):
 
         # Validation
         if not await self._get_xp_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+            return await interaction.edit_original_response(content=NOT_ENABLED)
 
         member = member or interaction.user
         conn = self.bot.pool
@@ -192,7 +192,7 @@ class XP(commands.Cog):
         e.add_field(name='Level', value=level, inline=True)
         e.add_field(name='Messages', value=num_msgs, inline=True)
 
-        await interaction.edit_original_message(embed=e)
+        await interaction.edit_original_response(embed=e)
 
     # _______________________ Give XP  ______________________
     @commands.command(name='givexp')
@@ -276,7 +276,7 @@ class XP(commands.Cog):
 
         # Validation
         if not await self._get_xp_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+            return await interaction.edit_original_response(content=NOT_ENABLED)
 
         guild = interaction.guild
         conn = self.bot.pool
@@ -330,7 +330,7 @@ class XP(commands.Cog):
 
         # Validation
         if not await self._get_xp_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+            return await interaction.edit_original_response(content=NOT_ENABLED)
 
         conn = self.bot.pool
         guild = interaction.guild

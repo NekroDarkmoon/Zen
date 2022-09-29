@@ -310,7 +310,7 @@ class Rep(commands.Cog):
 
         # Validation
         if not await self._get_rep_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+            return await interaction.edit_original_response(content=NOT_ENABLED)
 
         member = member or interaction.user
         conn = self.bot.pool
@@ -344,7 +344,7 @@ class Rep(commands.Cog):
         e.add_field(name='Last Gave', value=last_gave, inline=True)
         e.add_field(name='Last Received', value=last_received, inline=True)
 
-        await interaction.edit_original_message(embed=e)
+        await interaction.edit_original_response(embed=e)
 
     # # _______________________ Give Rep  ______________________
     @rep_group.command(name='give')
@@ -363,7 +363,7 @@ class Rep(commands.Cog):
 
         # Validation
         if not await self._get_rep_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+            return await interaction.edit_original_response(content=NOT_ENABLED)
 
         is_admin = interaction.user.guild_permissions.administrator
         if (rep > 1 or rep < 1) and not is_admin:
@@ -371,21 +371,21 @@ class Rep(commands.Cog):
                 title='Error.',
                 description='Not authorized to give multi rep',
                 color=discord.Color.red())
-            await interaction.edit_original_message(embed=e)
+            await interaction.edit_original_response(embed=e)
 
         if (member.id == interaction.user.id) and not is_admin:
             e = discord.Embed(
                 title='Error.',
                 description="Can't give rep to yourself.",
                 color=discord.Color.red())
-            await interaction.edit_original_message(embed=e)
+            await interaction.edit_original_response(embed=e)
 
         # Data builder
         conn = self.bot.pool
         now = datetime.utcnow()
         guild = interaction.guild
         author = interaction.user
-        message = await interaction.original_message()
+        message = await interaction.original_response()
 
         try:
             sql = '''SELECT * FROM rep WHERE server_id=$1 AND user_id=$2'''
@@ -405,7 +405,7 @@ class Rep(commands.Cog):
             return
 
         self.bot.dispatch('rep_received', interaction.message, guild, [member])
-        await interaction.edit_original_message(content=f'{member.display_name} now has `{new_rep}` rep.')
+        await interaction.edit_original_response(content=f'{member.display_name} now has `{new_rep}` rep.')
 
         return await self._log_rep(guild, message, author, [member], now, amount=rep)
 
@@ -453,7 +453,7 @@ class Rep(commands.Cog):
 
         # Validation
         if not await self._get_rep_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+            return await interaction.edit_original_response(content=NOT_ENABLED)
 
         guild = interaction.guild
         conn = self.bot.pool
@@ -505,7 +505,7 @@ class Rep(commands.Cog):
 
         # Validation
         if not await self._get_rep_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+            return await interaction.edit_original_response(content=NOT_ENABLED)
 
         conn = self.bot.pool
         guild = interaction.guild
@@ -548,7 +548,7 @@ class Rep(commands.Cog):
 
         # Validation
         if not await self._get_rep_enabled(interaction.guild_id):
-            return await interaction.edit_original_message(content=NOT_ENABLED)
+            return await interaction.edit_original_response(content=NOT_ENABLED)
 
         # Data builder
         guild = interaction.guild
@@ -569,7 +569,7 @@ class Rep(commands.Cog):
                 rows = await conn.fetch(sql, guild.id, member.id)
 
             if len(rows) == 0:
-                return await interaction.edit_original_message(content='`No rep found for this server`')
+                return await interaction.edit_original_response(content='`No rep found for this server`')
 
         except Exception:
             log.error('Error while getting rep log data.', exc_info=True)
