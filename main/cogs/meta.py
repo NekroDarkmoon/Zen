@@ -43,21 +43,25 @@ log = logging.getLogger('__name__')
 class GroupHelpPageSource(menus.ListPageSource):
     def __init__(
         self,
-        group: Union[commands.Group,
-                     commands.Cog],
-        commands: list[commands.Command],
+        group: Union[commands.Group, commands.Cog],
+        entries: list[commands.Command],
         *,
         prefix: str
     ) -> None:
-        super().__init__(entries=commands, per_page=6)
+        super().__init__(entries=entries, per_page=6)
         self.group: Union[commands.Group, commands.Cog] = group
         self.prefix: str = prefix
         self.title: str = f'{self.group.qualified_name} Commands'
         self.description: str = self.group.description
 
-    async def format_page(self, menu: ZenPages, commands: list[commands.Command]):
+    async def format_page(
+        self, menu: ZenPages, commands: list[commands.Command]
+    ) -> discord.Embed:
         embed = discord.Embed(
-            title=self.title, description=self.description, colour=discord.Colour(0xA8B9CD))
+            title=self.title,
+            description=self.description,
+            colour=discord.Colour.random()
+        )
 
         for command in commands:
             signature = f'{command.qualified_name} {command.signature}'
@@ -70,7 +74,9 @@ class GroupHelpPageSource(menus.ListPageSource):
                 name=f'Page {menu.current_page + 1}/{maximum} ({len(self.entries)} commands)')
 
         embed.set_footer(
-            text=f'Use "{self.prefix}help command" for more info on a command.')
+            text=f'Use "{self.prefix}help command" for more info on a command.'
+        )
+
         return embed
 
 
@@ -78,14 +84,14 @@ class GroupHelpPageSource(menus.ListPageSource):
 #                     Help Select Menu
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class HelpSelectMenu(discord.ui.Select['HelpMenu']):
-    def __init__(self, commands: dict[commands.Cog, list[commands.Command]], bot: Zen):
+    def __init__(self, entries: dict[commands.Cog, list[commands.Command]], bot: Zen):
         super().__init__(
             placeholder='Select a category...',
             min_values=1,
             max_values=1,
             row=0,
         )
-        self.commands: dict[commands.Cog, list[commands.Command]] = commands
+        self.commands: dict[commands.Cog, list[commands.Command]] = entries
         self.bot: Zen = bot
         self.__fill_options()
 
@@ -143,12 +149,13 @@ class FrontPageSource(menus.PageSource):
         self.index = page_number
         return self
 
-    def format_page(self, menu: HelpMenu, page: Any):
+    def format_page(self, menu: HelpMenu, page: Any) -> discord.Embed:
         embed = discord.Embed(
-            title='Bot Help', colour=discord.Colour(0xA8B9CD))
+            title='Bot Help', colour=discord.Colour.random())
         embed.description = inspect.cleandoc(
             f"""
             Hello! Welcome to the help page.
+
             Use "{menu.ctx.clean_prefix}help command" for more info on a command.
             Use "{menu.ctx.clean_prefix}help category" for more info on a category.
             Use the dropdown menu below to select a category.
@@ -261,14 +268,12 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
         menu = HelpMenu(FrontPageSource(), ctx=self.context)
         menu.add_categories(all_commands)
-        await self.context.release()
         await menu.start()
 
     async def send_cog_help(self, cog):
         entries = await self.filter_commands(cog.get_commands(), sort=True)
         menu = HelpMenu(GroupHelpPageSource(
             cog, entries, prefix=self.context.clean_prefix), ctx=self.context)
-        await self.context.release()
         await menu.start()
 
     def common_command_formatting(self, embed_like, command):
@@ -280,7 +285,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
     async def send_command_help(self, command):
         # No pagination necessary for a single command.
-        embed = discord.Embed(colour=discord.Colour(0xA8B9CD))
+        embed = discord.Embed(colour=discord.Colour.random())
         self.common_command_formatting(embed, command)
         await self.context.send(embed=embed)
 
@@ -297,7 +302,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
             group, entries, prefix=self.context.clean_prefix)
         self.common_command_formatting(source, group)
         menu = HelpMenu(source, ctx=self.context)
-        await self.context.release()
+
         await menu.start()
 
 
