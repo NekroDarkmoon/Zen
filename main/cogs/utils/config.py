@@ -17,18 +17,18 @@ ObjectHook = Callable[[Dict[str, Any]], Any]
 #                         Config
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class Config(Generic[_T]):
-    def __init__(self,
-                 name: str,
-                 *,
-                 object_hook: Optional[ObjectHook] = None,
-                 encoder: Optional[Type[json.JSONEncoder]] = None,
-                 loop: asyncio.AbstractEventLoop,
-                 load_later: bool = False,
-                 ) -> None:
+    def __init__(
+        self,
+        name: str,
+        *,
+        object_hook: Optional[ObjectHook] = None,
+        encoder: Optional[Type[json.JSONEncoder]] = None,
+        load_later: bool = False,
+    ) -> None:
         self.name = name
         self.object_hook = object_hook
         self.encoder = encoder
-        self.loop = loop
+        self.loop = asyncio.get_running_loop()
         self.lock = asyncio.Lock()
         self._db: Dict[str, Union[_T, Any]] = {}
 
@@ -39,7 +39,7 @@ class Config(Generic[_T]):
 
     def load_from_file(self) -> None:
         try:
-            with open(self.name) as f:
+            with open(self.name, 'r', encoding='utf-8') as f:
                 self._db = json.load(f, object_hook=self.object_hook)
         except FileNotFoundError:
             self._db = {}
