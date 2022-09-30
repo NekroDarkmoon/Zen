@@ -50,16 +50,25 @@ class ShortTime:
         re.VERBOSE,
     )
 
+    discord_fmt = re.compile(r'<t:(?P<ts>[0-9]+)(?:\:?[RFfDdTt])?>')
+    dt: datetime.datetime
+
     def __init__(
         self, argument: str, *, now: Optional[datetime.datetime] = None
     ) -> None:
         match = self.compiled.fullmatch(argument)
         if match is None or not match.group(0):
-            raise commands.BadArgument('invalid time provided.')
+            match = self.discord_fmt.fullmatch(argument)
+            if match is not None:
+                self.dt = datetime.datetime.fromtimestamp(
+                    int(match.group('ts')), tz=datetime.timezone.utc)
+                return
+            else:
+                raise commands.BadArgument('invalid time provided')
 
         data = {k: int(v) for k, v in match.groupdict(default=0).items()}
         now = now or datetime.datetime.utcnow()
-        self.dt: datetime.datetime = now + relativedelta(**data)
+        self.dt = now + relativedelta(**data)
 
         @classmethod
         async def convert(cls, ctx: Context, argument: str) -> Self:
