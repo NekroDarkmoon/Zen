@@ -2,20 +2,22 @@
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 from __future__ import annotations
+from ctypes import Union
 
 # Standard library imports
 import datetime
 import logging
-import discord
 import parsedatetime as pdt
 import re
-
 
 from dateutil.relativedelta import relativedelta
 from typing_extensions import Self
 from typing import TYPE_CHECKING, Any, Optional
 
 # Third party imports
+import discord
+
+from discord import app_commands
 from discord.ext import commands
 
 
@@ -124,6 +126,31 @@ class FutureTime(HumanTime):
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                      Transformers
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class BadTimeTransformer(app_commands.AppCommandError):
+    pass
+
+
+class TimeTransformer(app_commands.Transformer):
+    async def transform(
+        self, interaction: discord.Interaction, value: str
+    ) -> datetime.datetime:
+        now = interaction.created_at
+        try:
+            short = ShortTime(value, now=now)
+        except commands.BadArgument:
+            try:
+                human = FutureTime(value, now=now)
+            except commands.BadArgument as e:
+                raise BadTimeTransformer(str(e)) from None
+            else:
+                return human.dt
+        else:
+            return short.dt
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                  Friendly Time Result
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class FriendlyTimeResult:
@@ -160,17 +187,13 @@ class FriendlyTimeResult:
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                    User Friendly Time
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-class UserFriendlyTime:
+class UserFriendlyTime(commands.Converter):
     """That way quotes aren't absolutely necessary."""
-    converter: commands.Converter
-    default: Any
-
-    __slots__ = ('converter', 'default')
 
     def __init__(
         self,
-        converter: Optional[type[commands.Converter]
-                            | commands.Converter] = None,
+        converter: Optional[Union[type[commands.Converter],
+                                  commands.Converter]] = None,
         *,
         default: Any = None
     ) -> None:
@@ -180,96 +203,102 @@ class UserFriendlyTime:
         if converter is not None and not isinstance(converter, commands.Converter):
             raise TypeError('commands.Converter subclass necessary.')
 
-        self.converter = converter
-        self.default = default
+        self.converter: commands.Converter = converter
+        self.default: Any = default
 
     async def convert(self, ctx: Context, argument: str) -> FriendlyTimeResult:
-        try:
-            calendar = HumanTime.calendar
-            regex = ShortTime.compiled
-            now = ctx.message.created_at
+        calendar = HumanTime.calendar
+        regex = ShortTime.compiled
+        now = ctx.message.created_at
 
-            match = regex.match(argument)
-
-            if match is not None and match.group(0):
-                data = {k: int(v)
-                        for k, v in match.groupdict(default=0).items()}
-                remaining = argument[match.end():].strip()
-                result = FriendlyTimeResult(now + relativedelta(**data))
-                await result.ensure_constraints(ctx, self, now, remaining)
-                return result
-
-            # Apparently nlp does not like "from now"
-            # It likes "from x" in other cases though so handle the 'now' case
-            if argument.endswith('from now'):
-                argument = argument[:-8].strip()
-
-            if argument[:2] == 'me':
-                if argument[:6] in ('me to ', 'me in ', 'me at '):
-                    argument = argument[6:]
-
-            elems = calendar.nlp(argument, sourceTime=now)
-            if elems is None or len(elems) == 0:
-                raise commands.BadArgument(INVALID_TIME)
-
-            # Handle the following cases:
-            # "date time" foo
-            # date time foo
-            # foo date time
-            dt, status, begin, end, dt_str = elems[0]
-
-            if not status.hasDateOrTime:
-                raise commands.BadArgument(INVALID_TIME)
-
-            if begin not in (0, 1) and end != len(argument):
-                raise commands.BadArgument(
-                    'Time is either in an inappropriate location, which '
-                    'must be either at the end or beginning of your input, '
-                    'or I just flat out did not understand what you meant. Sorry.'
-                )
-
-            # TODO: Convert to func
-            if not status.hasTime:
-                dt: datetime.datetime = dt.replace(
-                    hour=now.hour, minute=now.minute, second=now.second, microsecond=now.microsecond
-                )
-
-            if status.accuracy == pdt.pdtContext.ACU_HALFDAY:
-                dt = dt.replace(day=now.day+1)
-
-            result = FriendlyTimeResult(
-                dt.replace(tzinfo=datetime.timezone.utc))
-            remaining = ''
-
-            if begin in (0, 1):
-                if begin == 1:
-                    if argument[0] != '"':
-                        raise commands.BadArgument(
-                            'Expected quote before time input.')
-
-                    if not (end < len(argument) and argument[end] == '"'):
-                        raise commands.BadArgument(
-                            'If time is quoted, you mused end quote it.')
-
-                    remaining = argument[end + 1:].lstrip(',.!')
-
-                else:
-                    remaining = argument[end:].lstrip(' ,.!')
-
-            elif len(argument) == end:
-                remaining = argument[:begin].strip()
-
+        match = regex.match(argument)
+        if match is not None and match.group(0):
+            data = {k: int(v) for k, v in match.groupdict(default=0).items()}
+            remaining = argument[match.end():].strip()
+            result = FriendlyTimeResult(now + relativedelta(**data))
             await result.ensure_constraints(ctx, self, now, remaining)
             return result
 
-        except:
-            import traceback
-            traceback.print_exc()
-            raise
+        if match is None or not match.group(0):
+            match = ShortTime.discord_fmt.match(argument)
+            if match is not None:
+                result = FriendlyTimeResult(
+                    datetime.datetime.fromtimestamp(
+                        int(match.group('ts')), tz=datetime.timezone.utc)
+                )
+                remaining = argument[match.end():].strip()
+                await result.ensure_constraints(ctx, self, now, remaining)
+                return result
+
+         # apparently nlp does not like "from now"
+        # it likes "from x" in other cases though so let me handle the 'now' case
+        if argument.endswith('from now'):
+            argument = argument[:-8].strip()
+
+        if argument[0:2] == 'me':
+            # starts with "me to", "me in", or "me at "
+            if argument[0:6] in ('me to ', 'me in ', 'me at '):
+                argument = argument[6:]
+
+        elements = calendar.nlp(argument, sourceTime=now)
+        if elements is None or len(elements) == 0:
+            raise commands.BadArgument(
+                'Invalid time provided, try e.g. "tomorrow" or "3 days".')
+
+        # handle the following cases:
+        # "date time" foo
+        # date time foo
+        # foo date time
+
+        # first the first two cases:
+        dt, status, begin, end, dt_string = elements[0]
+
+        if not status.hasDateOrTime:
+            raise commands.BadArgument(
+                'Invalid time provided, try e.g. "tomorrow" or "3 days".')
+
+        if begin not in (0, 1) and end != len(argument):
+            raise commands.BadArgument(
+                'Time is either in an inappropriate location, which '
+                'must be either at the end or beginning of your input, '
+                'or I just flat out did not understand what you meant. Sorry.'
+            )
+
+        if not status.hasTime:
+            # replace it with the current time
+            dt = dt.replace(hour=now.hour, minute=now.minute,
+                            second=now.second, microsecond=now.microsecond)
+
+        # if midnight is provided, just default to next day
+        if status.accuracy == pdt.pdtContext.ACU_HALFDAY:
+            dt = dt.replace(day=now.day + 1)
+
+        result = FriendlyTimeResult(dt.replace(tzinfo=datetime.timezone.utc))
+        remaining = ''
+
+        if begin in (0, 1):
+            if begin == 1:
+                # check if it's quoted:
+                if argument[0] != '"':
+                    raise commands.BadArgument(
+                        'Expected quote before time input...')
+
+                if not (end < len(argument) and argument[end] == '"'):
+                    raise commands.BadArgument(
+                        'If the time is quoted, you must unquote it.')
+
+                remaining = argument[end + 1:].lstrip(' ,.!')
+            else:
+                remaining = argument[end:].lstrip(' ,.!')
+        elif len(argument) == end:
+            remaining = argument[:begin].strip()
+
+        await result.ensure_constraints(ctx, self, now, remaining)
+        return
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Imports
+#                     Human Time Delta
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 def human_timedelta(
     dt: datetime.datetime,
@@ -338,16 +367,13 @@ def human_timedelta(
         else:
             return ' '.join(output) + out_suffix
 
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Imports
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                         Imports
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#                      Format Relative
+#                   Format Time Strings
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 def format_relative(dt: datetime.datetime) -> str:
     return format_dt(dt, 'R')
+
+
+def format_full(dt: datetime.datetime) -> str:
+    return format_dt(dt, 'F')
