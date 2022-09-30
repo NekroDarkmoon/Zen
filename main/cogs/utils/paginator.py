@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import traceback
+from turtle import title
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 # Third party imports
@@ -35,6 +36,26 @@ log = logging.getLogger(__name__)
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#                    Numbered Page Modal
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class NumberedPageModal(discord.ui.Modal, title='Go to page'):
+    page = discord.ui.TextInput(
+        label='Page', placeholder='Enter a number', min_length=1
+    )
+
+    def __init__(self, max_pages: Optional[int]) -> None:
+        super().__init__()
+        if max_pages is not None:
+            as_string = str(max_pages)
+            self.page.placeholder = f'Enter a number between 1 and {as_string}'
+            self.page.max_length = len(as_string)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        self.interaction = interaction
+        self.stop()
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         ZenPages
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class ZenPages(discord.ui.View):
@@ -53,7 +74,6 @@ class ZenPages(discord.ui.View):
         self.message: Optional[discord.Message] = None
         self.current_page: int = 0
         self.compact: bool = compact
-        self.input_lock = asyncio.Lock()
         self.clear_items()
         self.fill_items()
 
@@ -85,7 +105,9 @@ class ZenPages(discord.ui.View):
             self.add_item(self.stop_pages)
 
     async def _get_kwargs_from_page(self, page: int) -> Dict[str, Any]:
-        value = await discord.utils.maybe_coroutine(self.source.format_page, self, page)
+        value = await discord.utils.maybe_coroutine(
+            self.source.format_page, self, page
+        )
 
         if isinstance(value, dict):
             return value
@@ -159,7 +181,10 @@ class ZenPages(discord.ui.View):
         if interaction.user and interaction.user.id in (self.ctx.bot.owner_id, self.ctx.author.id):
             return True
 
-        await interaction.response.send_message('This pagination menu cannot be controlled by you, sorry!', ephemeral=True)
+        await interaction.response.send_message(
+            'This pagination menu cannot be controlled by you, sorry!',
+            ephemeral=True
+        )
         return False
 
     async def on_timeout(self) -> None:
@@ -172,9 +197,9 @@ class ZenPages(discord.ui.View):
         else:
             await interaction.response.send_message('An unknown error occurred, sorry', ephemeral=True)
 
-    async def start(self, *, content: Optional[str] = None) -> None:
+    async def start(self, *, content: Optional[str] = None, ephemeral: bool = False) -> None:
         if self.check_embeds and not self.ctx.channel.permissions_for(self.ctx.me).embed_links:
-            await self.ctx.send('Bot does not have embed links permission in this channel.')
+            await self.ctx.send('Bot does not have embed links permission in this channel.', ephemeral=True)
             return
 
         await self.source._prepare_once()
@@ -185,16 +210,16 @@ class ZenPages(discord.ui.View):
             kwargs.setdefault('content', content)
 
         self._update_labels(0)
-        self.message = await self.ctx.send(**kwargs, view=self)
+        self.message = await self.ctx.send(**kwargs, view=self, ephemeral=ephemeral)
 
     @discord.ui.button(label='≪', style=discord.ButtonStyle.grey)
     async def go_to_first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """go to the first page"""
+        """Go to the first page"""
         await self.show_page(interaction, 0)
 
     @discord.ui.button(label='Back', style=discord.ButtonStyle.blurple)
     async def go_to_previous_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """go to the previous page"""
+        """Go to the previous page"""
         await self.show_checked_page(interaction, self.current_page - 1)
 
     @discord.ui.button(label='Current', style=discord.ButtonStyle.grey, disabled=True)
@@ -203,41 +228,45 @@ class ZenPages(discord.ui.View):
 
     @discord.ui.button(label='Next', style=discord.ButtonStyle.blurple)
     async def go_to_next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """go to the next page"""
+        """Go to the next page"""
         await self.show_checked_page(interaction, self.current_page + 1)
 
     @discord.ui.button(label='≫', style=discord.ButtonStyle.grey)
     async def go_to_last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """go to the last page"""
+        """Go to the last page"""
         await self.show_page(interaction, self.source.get_max_pages() - 1)
 
     @discord.ui.button(label='Skip to page...', style=discord.ButtonStyle.grey)
     async def numbered_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Lets you type a page number to go to"""
-        if self.input_lock.locked():
-            await interaction.response.send_message('Already waiting for your response...', ephemeral=True)
-            return
 
         if self.message is None:
             return
 
-        async with self.input_lock:
-            channel = self.message.channel
-            author_id = interaction.user and interaction.user.id
-            await interaction.response.send_message('What page do you want to go to?', ephemeral=True)
+        modal = NumberedPageModal(self.source.get_max_pages())
+        await interaction.response.send_modal(modal)
+        timed_out = await modal.wait()
 
-            def message_check(m):
-                return m.author.id == author_id and channel.id == m.channel.id and m.content.isdigit()
+        if timed_out:
+            await interaction.followup.send('Took too long', ephemeral=True)
+            return
+        elif self.is_finished():
+            await modal.interaction.response.send_message('Took too long', ephemeral=True)
+            return
 
-            try:
-                msg = await self.ctx.bot.wait_for('message', check=message_check, timeout=30.0)
-            except asyncio.TimeoutError:
-                await interaction.followup.send('Took too long.', ephemeral=True)
-                await asyncio.sleep(5)
-            else:
-                page = int(msg.content)
-                await msg.delete()
-                await self.show_checked_page(interaction, page - 1)
+        value = str(modal.page.value)
+        if not value.isdigit():
+            await modal.interaction.response.send_message(
+                f'Expected a number not {value!r}',
+                ephemeral=True
+            )
+            return
+
+        value = int(value)
+        await self.show_checked_page(modal.interaction, value - 1)
+        if not modal.interaction.response.is_done():
+            error = modal.page.placeholder.replace('Enter', 'Expected')
+            await modal.interaction.response.send_message(error, ephemeral=True)
 
     @discord.ui.button(label='Quit', style=discord.ButtonStyle.red)
     async def stop_pages(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -253,20 +282,37 @@ class ZenPages(discord.ui.View):
 class FieldPageSource(menus.ListPageSource):
     """A page source that requires (field_name, field_value) tuple items."""
 
-    def __init__(self, entries, *, per_page: int) -> None:
+    def __init__(
+        self,
+        entries: list[tuple[Any, Any]],
+        *,
+        per_page: int = 12,
+        inline: bool = False,
+        clear_description: bool = True,
+    ) -> None:
         super().__init__(entries, per_page=per_page)
-        self.embed: discord.Embed = discord.Embed(color=discord.Colour.blue())
+        self.embed: discord.Embed = discord.Embed(
+            color=discord.Colour.random())
+        self.clear_description: bool = clear_description
+        self.inline: bool = inline
 
-    async def format_page(self, menu, entries):
+    async def format_page(
+        self,
+        menu: ZenPages,
+        entries: list[tuple[Any, Any]]
+    ) -> discord.Embed:
         self.embed.clear_fields()
-        self.embed.description = None
+
+        if self.clear_description:
+            self.embed.description = None
 
         for key, value in entries:
-            self.embed.add_field(name=key, value=value, inline=False)
+            self.embed.add_field(name=key, value=value, inline=self.inline)
 
         max = self.get_max_pages()
         if max > 1:
             text = f'Page {menu.current_page + 1}/{max} ({len(self.entries)} entries)'
+            self.embed.set_footer(text=text)
 
         return self.embed
 
@@ -277,7 +323,14 @@ class FieldPageSource(menus.ListPageSource):
 class TextPageSource(menus.ListPageSource):
     """ Text based Menu """
 
-    def __init__(self, text, *, prefix='```', suffix='```', max_size=2000):
+    def __init__(
+        self,
+        text: str,
+        *,
+        prefix: str = '```',
+        suffix: str = '```',
+        max_size: int = 2000
+    ) -> None:
         pages = CommandPaginator(
             prefix=prefix, suffix=suffix, max_size=max_size - 200)
         for line in text.split('\n'):
@@ -285,7 +338,11 @@ class TextPageSource(menus.ListPageSource):
 
         super().__init__(entries=pages.pages, per_page=1)
 
-    async def format_page(self, menu, content):
+    async def format_page(
+        self,
+        menu: ZenPages,
+        content: str
+    ) -> str:
         maximum = self.get_max_pages()
         if maximum > 1:
             return f'{content}\nPage {menu.current_page + 1}/{maximum}'
