@@ -65,12 +65,14 @@ class Bookmark(commands.Cog):
         guild = self.bot.get_guild(payload.guild_id)
         channel = guild.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
+        member = payload.member
 
-        await self._handle_reaction(message)
+        await self._handle_reaction(message, member)
 
     async def _handle_reaction(
         self,
         message: discord.Message,
+        member: discord.Member
     ) -> None:
         # Data builder
         author = message.author
@@ -91,7 +93,7 @@ class Bookmark(commands.Cog):
         content = f'Bookmark Created: {time.format_dt(datetime.utcnow(), "F")}'
         content += f'\n{message.jump_url}'
 
-        sent_msg = await author.send(content=content, embed=e)
+        sent_msg = await member.send(content=content, embed=e)
 
         # Add delete reaction
         await sent_msg.add_reaction('\N{CROSS MARK}')
