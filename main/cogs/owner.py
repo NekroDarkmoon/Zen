@@ -55,9 +55,9 @@ class Owner(commands.Cog):
     async def cog_check(self, ctx: Context) -> bool:
         return await self.bot.is_owner(ctx.author)
 
-    @property
-    def display_emoji(self) -> discord.PartialEmoji:
-        return discord.PartialEmoji(name='tools')
+    # @property
+    # def display_emoji(self) -> discord.PartialEmoji:
+    #     return discord.PartialEmoji(name='tools')
 
     # -------------------------------------------------------
     #                   Helper Functions
