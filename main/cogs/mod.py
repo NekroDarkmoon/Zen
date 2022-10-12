@@ -1258,6 +1258,37 @@ class Mod(commands.Cog):
             ctx, args.search, predicate, before=args.before, after=args.after
         )
 
+    @mod.command(name='notify')
+    @checks.has_permissions(manage_guild=True)
+    async def notify(
+        self,
+        ctx: Context,
+        role: discord.Role,
+        msg: Optional[str]
+    ) -> None:
+        """Pings a non-ping-able role.
+
+        You can pass either the ID or the name of the role.
+
+        In order for this to work, the bot must have Manage Guild permissions.
+        To use this command you must have Manage Guild permission.
+        """
+
+        # Moderator Validation
+        if not ctx.author.guild_permissions.manage_guild:
+            return
+
+        # Confirm
+        confirm = await ctx.prompt(
+            f'This will ping the `{role.name}` role. Are you sure?'
+        )
+        if not confirm:
+            return await ctx.send('Aborting.')
+
+        await ctx.send(
+            content=f'{role.mention}\n{msg if msg is not None else ""}'
+        )
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
