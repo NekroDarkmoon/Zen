@@ -132,9 +132,9 @@ class Zen(commands.AutoShardedBot):
     async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
         self.prefixes: Config[list[str]] = Config(
-            'main/settings/prefixes.json', loop=self.loop)
+            'main/settings/prefixes.json')
         self.blacklist: Config[bool] = Config(
-            'main/settings/blacklist.json', loop=self.loop)
+            'main/settings/blacklist.json')
 
         self.bot_app_info = await self.application_info()
         self.owner_id = self.bot_app_info.owner.id

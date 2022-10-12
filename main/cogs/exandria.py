@@ -62,7 +62,7 @@ class Exandria(commands.Cog):
         self.bot: Zen = bot
         self.approved_tags = config.approved_tags
         self.participants: Config[list[int]] = Config(
-            './events/tr/participants.json', loop=bot.loop)
+            './events/tr/participants.json')
 
     async def cog_check(self, ctx: Context) -> bool:
         return ctx.guild.id in [719063399148814418, 739684323141353597]
