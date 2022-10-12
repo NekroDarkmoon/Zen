@@ -14,7 +14,6 @@ import textwrap
 import time
 import traceback
 
-from asyncpg import Record
 from contextlib import redirect_stdout
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, Mapping, Optional, Union
@@ -29,6 +28,7 @@ from main.cogs.utils.formats import TabularData, Plural
 
 
 if TYPE_CHECKING:
+    from asyncpg import Record
     from main.Zen import Zen
     from main.cogs.utils.context import Context
 
@@ -43,6 +43,8 @@ log = logging.getLogger(__name__)
 #                         Owner
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class Owner(commands.Cog):
+    """Owner only commands."""
+
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
         self._last_result: Optional[Any] = None
@@ -52,6 +54,10 @@ class Owner(commands.Cog):
     #                    Cog Functions
     async def cog_check(self, ctx: Context) -> bool:
         return await self.bot.is_owner(ctx.author)
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='tools')
 
     # -------------------------------------------------------
     #                   Helper Functions
@@ -180,7 +186,9 @@ class Owner(commands.Cog):
 
         await ctx.reply(f"Synced tree to {formats.Plural(fmt):guild}.")
 
-    @commands.command(hidden=True)
+    # ********************************************************
+    #                       SQL COMMANDS
+    @commands.group(hidden=True, invoke_without_command=True)
     async def sql(self, ctx: Context, *, query: str):
         """Run some SQL."""
         query = self.cleanup_code(query)
@@ -217,6 +225,78 @@ class Owner(commands.Cog):
             await ctx.send('Too many results...', file=discord.File(fp, 'results.txt'))
         else:
             await ctx.send(fmt)
+
+    async def send_sql_results(self, ctx: Context, records: list[Any]):
+        headers = list(records[0].keys())
+        table = TabularData()
+        table.set_columns(headers)
+        table.add_rows(list(r.values()) for r in records)
+        render = table.render()
+
+        fmt = f'```\n{render}\n```'
+        if len(fmt) > 2000:
+            fp = io.BytesIO(fmt.encode('utf-8'))
+            await ctx.send('Too many results...', file=discord.File(fp, 'results.txt'))
+        else:
+            await ctx.send(fmt)
+
+    @sql.command(name='schema', hidden=True)
+    async def sql_schema(self, ctx: Context, *, table_name: str) -> None:
+        """Runs a query describing the table schema."""
+        query = """SELECT column_name, data_type, column_default, is_nullable
+                   FROM INFORMATION_SCHEMA.COLUMNS
+                   WHERE table_name = $1
+                """
+
+        results: list[Record] = await ctx.db.fetch(query, table_name)
+
+        if len(results) == 0:
+            await ctx.send('Could not find a table with that name.')
+            return
+
+        await self.send_sql_results(ctx, results)
+
+    @sql.command(name='tables', hidden=True)
+    async def sql_tables(self, ctx: Context):
+        """Lists all SQL tables in the database."""
+
+        query = """SELECT table_name
+                   FROM information_schema.tables
+                   WHERE table_schema='public' AND table_type='BASE TABLE'
+                """
+
+        results: list[Record] = await ctx.db.fetch(query)
+
+        if len(results) == 0:
+            await ctx.send('Could not find any tables')
+            return
+
+        await self.send_sql_results(ctx, results)
+
+    @sql.command(name='sizes', hidden=True)
+    async def sql_sizes(self, ctx: Context):
+        """Display how much space the database is taking up."""
+
+        # Credit: https://wiki.postgresql.org/wiki/Disk_Usage
+        query = """
+            SELECT nspname || '.' || relname AS "relation",
+                pg_size_pretty(pg_relation_size(C.oid)) AS "size"
+              FROM pg_class C
+              LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+              WHERE nspname NOT IN ('pg_catalog', 'information_schema')
+              ORDER BY pg_relation_size(C.oid) DESC
+              LIMIT 20;
+        """
+
+        results: list[Record] = await ctx.db.fetch(query)
+
+        if len(results) == 0:
+            await ctx.send('Could not find any tables')
+            return
+
+        await self.send_sql_results(ctx, results)
+
+    # ********************************************************
 
     @commands.command(hidden=True, name='eval')
     async def _eval(self, ctx: Context, *, body: str) -> None:
