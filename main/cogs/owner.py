@@ -30,7 +30,7 @@ from main.cogs.utils.formats import TabularData, Plural
 if TYPE_CHECKING:
     from asyncpg import Record
     from main.Zen import Zen
-    from main.cogs.utils.context import Context
+    from main.cogs.utils.context import Context, GuildContext
 
 
 GuildChannel = discord.TextChannel | discord.VoiceChannel | discord.StageChannel | discord.CategoryChannel | discord.Thread
@@ -148,43 +148,30 @@ class Owner(commands.Cog):
         assert ctx.guild is not None
         await ctx.guild.leave()
 
-    @commands.command()
+    @commands.group(invoke_without_command=True)
+    @commands.is_owner()
     @commands.guild_only()
-    async def sync(
-        self,
-        ctx: Context,
-        guilds: commands.Greedy[discord.Object],
-        spec: Optional[Literal['~', '*']] = None
-    ) -> None:
-        """ Sync bot to all channels"""
+    async def sync(self, ctx: GuildContext, guild_id: Optional[int], copy: bool = False) -> None:
+        """Syncs the slash commands with the given guild"""
 
-        assert ctx.guild is not None
+        if guild_id:
+            guild = discord.Object(id=guild_id)
+        else:
+            guild = ctx.guild
 
-        if not guilds:
-            if spec == '~':
-                fmt = await ctx.bot.tree.sync(guild=ctx.guild)
-            elif spec == '*':
-                ctx.bot.tree.copy_global_to(guild=ctx.guild)
-                fmt = await ctx.bot.tree.sync(guild=ctx.guild)
-            else:
-                fmt = await ctx.bot.tree.sync()
+        if copy:
+            self.bot.tree.copy_global_to(guild=guild)
 
-            await ctx.reply(
-                f"Synced {formats.Plural(len(fmt)):command} {'globally' if spec is None else 'to the current guild.'}"
-            )
+        commands = await self.bot.tree.sync(guild=guild)
+        await ctx.send(f'Successfully synced {len(commands)} commands')
 
-            return
+    @sync.command(name='global')
+    @commands.is_owner()
+    async def sync_global(self, ctx: Context):
+        """Syncs the commands globally"""
 
-        fmt = 0
-        for guild in guilds:
-            try:
-                await ctx.bot.tree.sync(guild=guild)
-            except discord.HTTPException:
-                pass
-            else:
-                fmt += 1
-
-        await ctx.reply(f"Synced tree to {formats.Plural(fmt):guild}.")
+        commands = await self.bot.tree.sync(guild=None)
+        await ctx.send(f'Successfully synced {len(commands)} commands')
 
     # ********************************************************
     #                       SQL COMMANDS
