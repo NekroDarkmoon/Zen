@@ -145,7 +145,7 @@ class TimeTransformer(app_commands.Transformer):
     async def transform(
         self, interaction: discord.Interaction, value: str
     ) -> datetime.datetime:
-        now = interaction.created_at
+        now = interaction.created_at.replace(tzinfo=None)
         try:
             short = ShortTime(value, now=now)
         except commands.BadArgument:
