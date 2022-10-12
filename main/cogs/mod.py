@@ -1264,6 +1264,7 @@ class Mod(commands.Cog):
         self,
         ctx: Context,
         role: discord.Role,
+        *,
         msg: Optional[str]
     ) -> None:
         """Pings a non-ping-able role.
@@ -1277,6 +1278,9 @@ class Mod(commands.Cog):
         # Moderator Validation
         if not ctx.author.guild_permissions.manage_guild:
             return
+
+        if ctx.interaction is None:
+            await ctx.message.delete()
 
         # Confirm
         confirm = await ctx.prompt(
