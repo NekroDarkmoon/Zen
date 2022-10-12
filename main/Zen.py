@@ -401,10 +401,7 @@ class Zen(commands.AutoShardedBot):
         else:
             self._auto_spam_count.pop(author_id, None)
 
-        try:
-            await self.invoke(ctx)
-        finally:
-            await ctx.release()
+        await self.invoke(ctx)
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
         if guild.id in self.blacklist:
