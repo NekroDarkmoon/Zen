@@ -136,7 +136,7 @@ class Zen(commands.AutoShardedBot):
             'main/settings/prefixes.json')
         self.blacklist: Config[bool] = Config(
             'main/settings/blacklist.json')
-        self.google_sheet_ids: Config[str] = Config(
+        self.google_sheet_config: Config[dict] = Config(
             'main/settings/sheets.json'
         )
 

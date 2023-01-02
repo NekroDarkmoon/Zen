@@ -51,7 +51,7 @@ class Config(Generic[_T]):
     def _dump(self):
         temp = f'{self.name}-{uuid.uuid4()}.tmp'
         with open(temp, 'w', encoding='utf-8') as tmp:
-            json.dump(self._db.copy(), tmp, ensure_ascii=True,
+            json.dump(self._db.copy(), tmp, ensure_ascii=True, indent='\t',
                       cls=self.encoder, separators=(',', ':'))
 
         os.replace(temp, self.name)

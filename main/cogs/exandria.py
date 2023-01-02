@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import random
 import os
+
 from typing import TYPE_CHECKING, Optional
 
 # Third party imports
@@ -15,7 +16,7 @@ import asyncio
 import discord
 import pandas as pd
 
-from discord.ext import commands
+from discord.ext import commands, tasks
 from google.oauth2.service_account import Credentials
 from gspread import authorize
 from gspread import Client as GSpreadClient
@@ -40,7 +41,6 @@ log = logging.getLogger('__name__')
 class SheetHandler:
     def __init__(self) -> None:
         self.SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-        self.sheet_ids: set[str] = set()
         self._active = False
         self.credentials = None
         self.sheetClient = self._connect()
@@ -58,7 +58,10 @@ class SheetHandler:
 
         return authorize(self.credentials)
 
-    def _get_df(
+    def close(self):
+        self.sheetClient.session.close()
+
+    def get_data(
         self, sheet_id: str, worksheet_id: str | int = 0
     ) -> pd.DataFrame:
         sheet = self.sheetClient.open_by_key(sheet_id)
@@ -69,7 +72,7 @@ class SheetHandler:
         return pd.DataFrame(worksheet.get_all_records())
 
     async def get_participants(self, sheet_id: str, ) -> set[str]:
-        df = self._get_df(sheet_id)
+        df = self.get_data(sheet_id)
         participants = set(df.loc[:, "Discord Username"].to_list())
         return participants
 
@@ -98,15 +101,72 @@ class SheetHandler:
 class Exandria(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
-        self.sheet_ids = bot.google_sheet_ids
-        self.sheetHandler = SheetHandler()
-        self.logSheets: dict[bool] = dict()
+        self.sheet_config = bot.google_sheet_config
+        self.SheetHandler = SheetHandler()
+        self.log_sheets: dict[bool] = dict()
+        self.get_sheet_updates.start()
 
-        for key in self.sheet_ids.all().keys():
-            self.logSheets[key] = True
+        for key in self.sheet_config.all().keys():
+            self.log_sheets[key] = True
+
+    def cog_unload(self) -> None:
+        self.get_sheet_updates.cancel()
+        self.SheetHandler.close()
 
     async def cog_check(self, ctx: Context) -> bool:
         return ctx.guild.id in [719063399148814418, 739684323141353597]
+
+    # -----------------------------------------------------------------------
+    #                               Tasks
+    @tasks.loop(minutes=45.0)
+    async def get_sheet_updates(self):
+        try:
+            if self.log_sheets['themedWorldBuilding']:
+                await self.handle_themed_event_data()
+        except Exception as e:
+            log.error(e, exc_info=True)
+            pass
+
+    @get_sheet_updates.before_loop
+    async def before_sheet_updates(self):
+        await self.bot.wait_until_ready()
+
+    async def handle_themed_event_data(self) -> None:
+        sheet_data = self.sheet_config.get('themedWorldBuilding')
+        last_update_count = sheet_data.get('lastSent')
+        df: pd.DataFrame = self.SheetHandler.get_data(sheet_data.get('id'))
+
+        # Validation
+        if df.shape[0] == last_update_count:
+            return
+
+        data = df.iloc[last_update_count:, 1:]
+
+        # Get channel data
+        guild = self.bot.get_guild(719063399148814418)
+        channel = guild.get_channel(int(sheet_data.get('channel_id')))
+
+        # Construct Embeds
+        for idx, row in data.iterrows():
+            msg = f"**Entry #{idx + 1}**  **By**: {row['Discord Username']}\n"
+            msg += f"**Tags**: {row['Primary Tag']}, {row['Secondary Tags (Comma Separated)']}\n\n"
+
+            try:
+                # await channel.send(embed=e)
+                await channel.send(content=msg)
+                content = row["Entry"]
+                content = [content[i:i+2000]
+                           for i in range(0, len(content), 2000)]
+                for c in content:
+                    await channel.send(content=c)
+
+                await channel.send(content="```\n.\n```")
+            except Exception as e:
+                log.error(e, exc_info=True)
+
+        # Update last sent
+        sheet_data['lastSent'] = df.shape[0]
+        await self.sheet_config.put('themedWorldBuilding', sheet_data)
 
     # -----------------------------------------------------------------------
     #                               Commands
@@ -135,8 +195,8 @@ class Exandria(commands.Cog):
         guild = ctx.guild
 
         # Get data
-        participants: list[str] = list(await self.sheetHandler.get_participants(
-            self.sheet_ids.get('themedWorldBuilding')
+        participants: list[str] = list(await self.SheetHandler.get_participants(
+            self.sheet_config.get('themedWorldBuilding').get('id')
         ))
         num_participants = len(participants)
         winner_str = random.choice(participants)
