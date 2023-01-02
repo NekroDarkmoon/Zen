@@ -15,8 +15,6 @@ from typing import Any, Awaitable, Callable, Coroutine, MutableMapping, Protocol
 
 # Third party imports
 from lru import LRU
-
-
 from discord.ext import commands
 
 
