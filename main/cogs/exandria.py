@@ -8,16 +8,17 @@ import asyncio
 # Standard library imports
 import logging
 import random
-import re
+import os
 
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 
 # Third party imports
 import discord
-from discord.ext import commands
 
+from discord.ext import commands
+from google.oauth2.service_account import Credentials
+from gspread import authorize
 
 # Local application imports
 from main.settings import config
@@ -37,6 +38,27 @@ log = logging.getLogger('__name__')
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                          Main
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class SheetHandler:
+    def __init__(self, sheet_ids: list) -> None:
+        self.SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
+        self.sheet_ids = set()
+        self._active = False
+        self.credentials = None
+
+        self._connect()
+
+    def _connect(self) -> None:
+        if os.path.exists('./main/settings/credentials.json'):
+            self.credentials = Credentials.from_service_account_file(
+                './main/settings/credentials.json',
+                scopes=self.SCOPES
+            )
+            self._active = True
+        else:
+            return log.error("Unable to find credentials file. Aborting connection.")
+
+        self.sheetClient = authorize(self.credentials)
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                          Main
@@ -57,12 +79,15 @@ log = logging.getLogger('__name__')
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                          Main
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 class Exandria(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
-        self.approved_tags = config.approved_tags
-        self.participants: Config[list[int]] = Config(
-            './events/tr/participants.json')
+        sheet_ids = list(
+            bot.google_sheet_ids.all().values()
+        )
+        self.sheetHandler = SheetHandler(sheet_ids)
 
     async def cog_check(self, ctx: Context) -> bool:
         return ctx.guild.id in [719063399148814418, 739684323141353597]

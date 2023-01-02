@@ -136,6 +136,9 @@ class Zen(commands.AutoShardedBot):
             'main/settings/prefixes.json')
         self.blacklist: Config[bool] = Config(
             'main/settings/blacklist.json')
+        self.google_sheet_ids: Config[str] = Config(
+            'main/settings/sheets.json'
+        )
 
         self.bot_app_info = await self.application_info()
         self.owner_id = self.bot_app_info.owner.id
