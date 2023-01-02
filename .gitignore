@@ -130,6 +130,7 @@ dmypy.json
 
 
 # Custom files
+*.log
 main/settings/config.py
 main/settings/*.json
 events/tr
