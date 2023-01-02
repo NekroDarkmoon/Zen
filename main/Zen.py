@@ -225,7 +225,6 @@ class Zen(commands.AutoShardedBot):
     ) -> Optional[discord.Member]:
         """Queries a member by their name, name + discrim, or nickname.
 
-
         Args:
             guild (discord.Guild): The guild to query the member in.
             argument (str): The name, nickname, or name + discrim combo to check.
