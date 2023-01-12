@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 
 log = logging.getLogger(__name__)
+GuildWritableChannels = discord.TextChannel | discord.CategoryChannel | discord.ForumChannel | discord.Thread
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -197,7 +198,9 @@ class Settings(commands.Cog):
         self,
         ctx: Context,
         action: Literal['add', 'remove', 'list'],
-        channels: commands.Greedy[discord.TextChannel]
+        channels: commands.Greedy[
+            discord.TextChannel | discord.CategoryChannel | discord.ForumChannel
+        ]
     ) -> None:
         """ Disable rep in certain channels
 

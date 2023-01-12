@@ -31,6 +31,8 @@ log = logging.getLogger(__name__)
 NOT_ENABLED = 'Error - System Not Enabled.'
 SYSTEM = 'rep'
 
+GuildWritableChannels = discord.TextChannel | discord.CategoryChannel | discord.ForumChannel | discord.Thread
+
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                      Rep Log Pages
@@ -78,7 +80,8 @@ class Rep(commands.Cog):
     # --------------------------------------------------
     #               App Commands Settings
     rep_group = app_commands.Group(
-        name='rep', description='Rep Commands.')
+        name='rep', description='Rep Commands.'
+    )
 
     # ______________________ On Message Rep _______________________
     @commands.Cog.listener()
@@ -88,7 +91,7 @@ class Rep(commands.Cog):
             return
 
         # Check if forbidden channel
-        if message.channel.id in await self._get_excluded_channels(message.guild.id):
+        if await self._is_excluded_channel(message.channel, message.guild):
             return
 
         if message.author.bot:
@@ -218,7 +221,7 @@ class Rep(commands.Cog):
         now = datetime.now()
 
         # Validation
-        if channel.id in await self._get_excluded_channels(guild.id) or author.bot:
+        if await self._is_excluded_channel(channel, guild) or author.bot:
             return
 
         if author.id == member.id and not member.guild_permissions.administrator:
@@ -266,7 +269,7 @@ class Rep(commands.Cog):
         now = datetime.now()
 
         # Validation
-        if channel.id in await self._get_excluded_channels(guild.id) or author.bot:
+        if await self._is_excluded_channel(channel, guild) or author.bot:
             return
 
         if author.id == member.id and not member.guild_permissions.administrator:
@@ -633,7 +636,7 @@ class Rep(commands.Cog):
 
     # _______________ Get Excluded Channels  __________________
     @alru_cache(maxsize=128)
-    async def _get_excluded_channels(self, server_id: int) -> Optional[list[int]]:
+    async def _get_excluded_channels(self, server_id: int) -> list[int]:
         # Get pool
         conn = self.bot.pool
 
@@ -644,10 +647,34 @@ class Rep(commands.Cog):
             if res is not None:
                 return res['excluded_rep_channels']
             else:
-                return None
+                return list()
         except Exception:
             log.error('Error while fetching excluded channels.', exc_info=True)
-            return None
+            return list()
+
+    # _____________________ Rep Enabled  _____________________
+    async def _is_excluded_channel(
+        self,
+        channel: GuildWritableChannels,
+        guild: discord.Guild
+    ) -> bool:
+        # Get list of excluded channels
+        channels: set[int] = set(await self._get_excluded_channels(guild.id))
+
+        # Check if channel is a thread or post
+        parent: Optional[int] = getattr(channel, 'parent_id', None)
+        category = channel.category_id
+
+        if channel in channels:
+            return True
+
+        if parent is not None and parent in channels:
+            return True
+
+        if category is not None and category in channels:
+            return True
+
+        return False
 
     # _____________________ Rep Enabled  _____________________
     @alru_cache(maxsize=128)
