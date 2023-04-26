@@ -15,7 +15,7 @@ import sys
 import traceback
 
 from collections import defaultdict, Counter
-from typing import TYPE_CHECKING, Any, AsyncIterator, Iterable, Optional, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Coroutine, Iterable, Optional, Union
 import asyncpg
 
 # Third party imports
@@ -27,6 +27,9 @@ from discord.ext import commands
 import main.settings.config as config
 from main.cogs.utils.config import Config
 from main.cogs.utils.context import Context
+
+if TYPE_CHECKING:
+    ...
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Setup
@@ -91,12 +94,16 @@ class ProxyObject(discord.Object):
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class Zen(commands.AutoShardedBot):
     user: discord.ClientUser
-    session: aiohttp.ClientSession
     pool: asyncpg.Pool
     command_stats: Counter[str]
-    socket_stats: Counter[Any]
-    gateway_handler: Any
+    socket_stats: Counter[str]
+    command_types_used: Counter[bool]
+    logging_handler: Any
     bot_app_info: discord.AppInfo
+    old_tree_error = Callable[[
+        discord.Interaction, discord.app_commands.AppCommandError], Coroutine[Any, Any, None]]
+    session: aiohttp.ClientSession
+    gateway_handler: Any
 
     def __init__(self) -> None:
         allowed_mentions = discord.AllowedMentions(
@@ -117,7 +124,7 @@ class Zen(commands.AutoShardedBot):
         )
 
         self.client_id: str = config.client_id
-        self.dev_guilds: set(config.guilds)
+        self.dev_guilds: set = set(config.guilds)
         self.resumes: defaultdict[int,
                                   list[datetime.datetime]] = defaultdict(list)
         self.identifies: defaultdict[int,
@@ -333,12 +340,8 @@ class Zen(commands.AutoShardedBot):
         print(f'Shard ID {shard_id} has resumed...')
         self.resumes[shard_id].append(discord.utils.utcnow())
 
-    async def on_shard_resumed(self, shard_id) -> None:
-        print(f'Shard ID {shard_id} has resumed...')
-        self.resumes[shard_id].append(discord.utils.utcnow())
-
     @discord.utils.cached_property
-    def stats_webhook(self) -> None:
+    def stats_webhook(self) -> discord.Webhook:
         wh_id, wh_token = self.config.stat_webhook
         hook = discord.Webhook.partial(
             id=wh_id, token=wh_token, session=self.session)
@@ -389,7 +392,7 @@ class Zen(commands.AutoShardedBot):
 
         bucket = self.spam_control.get_bucket(message)
         current = message.created_at.timestamp()
-        retry_after = bucket.update_rate_limit(current)
+        retry_after = bucket and bucket.update_rate_limit(current)
         author_id = message.author.id
 
         if retry_after and author_id != self.owner_id:
