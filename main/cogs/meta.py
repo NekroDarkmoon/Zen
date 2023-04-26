@@ -515,7 +515,7 @@ class Meta(commands.Cog):
     @info.command('server')
     @app_commands.describe(idx='Guild ID')
     async def server_info(
-        self, ctx: GuildContext, idx: Optional[int]
+        self, ctx: GuildContext, idx: Optional[int] = None
     ) -> None:
         """ Shows information about the server."""
         await ctx.typing()
@@ -686,6 +686,25 @@ class Meta(commands.Cog):
 
         pass
 
+    async def say_permissions(
+        self, ctx: Context, member: discord.Member, channel: discord.abc.GuildChannel | discord.Thread
+    ):
+        permissions = channel.permissions_for(member)
+        e = discord.Embed(color=member.color)
+        avatar = member.display_avatar.with_static_format('png')
+        e.set_author(name=str(member), url=avatar)
+        allowed, denied = [], []
+        for name, value in permissions:
+            name = name.replace('_', ' ').replace('guild', 'server').title()
+            if value:
+                allowed.append(name)
+            else:
+                denied.append(name)
+
+        e.add_field(name='Allowed', value='\n'.join(allowed))
+        e.add_field(name='Denied', value='\n'.join(denied))
+        await ctx.send(embed=e)
+
     @info.command('permissions')
     @app_commands.describe(member='Selected Member', channel='Selected Channel')
     async def permissions(
@@ -694,7 +713,66 @@ class Meta(commands.Cog):
         member: Optional[discord.Member] = None,
         channel: Optional[GuildChannel] = None
     ) -> None:
-        pass
+        """Shows a member's permissions in a specific channel.
+
+        If no channel is given then it uses the current one.
+
+        You cannot use this in private messages. If no member is given then
+        the info returned will be yours.
+        """
+        channel = channel or ctx.channel
+        if member is None:
+            member = ctx.author
+
+        await self.say_permissions(ctx, member, channel)
+
+    @info.command()
+    @commands.guild_only()
+    async def botpermissions(
+        self, ctx: GuildContext, *, channel: Optional[GuildChannel] = None
+    ):
+        """Shows the bot's permissions in a specific channel.
+
+        If no channel is given then it uses the current one.
+
+        This is a good way of checking if the bot has the permissions needed
+        to execute the commands it wants to execute.
+        """
+        channel = channel or ctx.channel
+        member = ctx.guild.me
+        await self.say_permissions(ctx, member, channel)
+
+    @info.command()
+    @commands.is_owner()
+    async def debugpermissions(
+            self, ctx: Context, guild_id: int, channel_id: int, author_id: int = None
+    ):
+        """Shows permission resolution for a channel and an optional author."""
+
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            return await ctx.send('Guild not found?')
+
+        channel = guild.get_channel(channel_id)
+        if channel is None:
+            return await ctx.send('Channel not found?')
+
+        if author_id is None:
+            member = guild.me
+        else:
+            member = await self.bot.get_or_fetch_member(guild, author_id)
+
+        if member is None:
+            return await ctx.send('Member not found?')
+
+        await self.say_permissions(ctx, member, channel)
+
+    @commands.hybrid_command(aliases=['invite'])
+    async def join(self, ctx: Context):
+        """Posts my invite to allow you to invite me"""
+        perms = discord.Permissions.all()
+        perms.administrator = True
+        await ctx.send(f'<{discord.utils.oauth_url(self.bot.client_id, permissions=perms)}>')
 
     @commands.hybrid_command(name='preview')
     @app_commands.describe(message='Message to preview')
