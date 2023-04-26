@@ -665,7 +665,7 @@ class Rep(commands.Cog):
         parent: Optional[int] = getattr(channel, 'parent_id', None)
         category = channel.category_id
 
-        if channel in channels:
+        if channel.id in channels:
             return True
 
         if parent is not None and parent in channels:

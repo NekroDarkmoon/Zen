@@ -192,7 +192,7 @@ class Settings(commands.Cog):
         await interaction.edit_original_response(content=msg)
 
     # _____________ Exclude Channels Rep  _____________________
-    @commands.command(name='excluderep')
+    @commands.command(name='exclude_rep')
     @commands.has_permissions(administrator=True)
     async def exclude_rep(
         self,
@@ -204,7 +204,7 @@ class Settings(commands.Cog):
     ) -> None:
         """ Disable rep in certain channels
 
-        Usage: `excluderep <add | remove | list> ["channel..."]`
+        Usage: `exclude_rep <add | remove | list> ["channel..."]`
         """
         # Data builder
         conn = self.bot.pool
