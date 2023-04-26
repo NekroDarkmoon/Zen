@@ -648,7 +648,48 @@ class Meta(commands.Cog):
     async def self_info(
         self, ctx: Context
     ) -> None:
-        pass
+        e = discord.Embed(
+            title="Zen",
+            description="Hello, I'm a bot for ttrpg servers. I help with managing ttrgp communities."
+        )
+
+        e.add_field(
+            name="Bot ID", value=f"```{self.bot.user.id}```", inline=True
+        )
+
+        e.add_field(
+            name="Guilds", value=f"```{len(self.bot.guilds)}```", inline=True
+        )
+
+        total_members = sum(
+            [g.member_count for g in self.bot.guilds if g.member_count is not None]
+        )
+        e.add_field(
+            name="Members", value=f"```{total_members}```", inline=False
+        )
+
+        slash_commands = len(self.bot.tree.get_commands())
+        all_commands = len(self.bot.commands)
+
+        e.add_field(name="Slash Commands", value=f"```{slash_commands}```")
+        e.add_field(name="All Commands", value=f"```{all_commands}```")
+
+        elapsed_time = datetime.datetime.now() - self.bot.start_time
+        uptime = f"{round(elapsed_time.seconds / 3600, 2)} hours" if elapsed_time.days == 0 else f"{elapsed_time.days} days"
+
+        e.add_field(
+            name="Uptime", value=f"```{uptime}```", inline=False
+        )
+
+        # repo link
+        e.add_field(
+            name="Repo Link", value="https://github.com/NekroDarkmoon/Zen", inline=False
+        )
+
+        e.timestamp = datetime.datetime.now(tz=None)
+        e.set_thumbnail(url=self.bot.user.avatar)
+
+        await ctx.send(embed=e)
 
     @info.command('role')
     @app_commands.describe(role='Selected Role')
@@ -673,18 +714,6 @@ class Meta(commands.Cog):
                           value=f'`{count}`', inline=False)
         p.embed.set_author(name=ctx.author.display_name)
         await p.start()
-
-    @info.command('channel')
-    @app_commands.describe(channel='Selected Channel')
-    async def channel_info(
-        self, ctx: GuildContext, channel: GuildChannel
-    ) -> None:
-        """ Get Information about a channel"""
-        # Data builder
-        idx = channel.id
-        view_perms = channel.overwrites
-
-        pass
 
     async def say_permissions(
         self, ctx: Context, member: discord.Member, channel: discord.abc.GuildChannel | discord.Thread

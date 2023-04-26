@@ -142,6 +142,7 @@ class Zen(commands.AutoShardedBot):
 
         self.bot_app_info = await self.application_info()
         self.owner_id = self.bot_app_info.owner.id
+        self.start_time = datetime.datetime.now()
 
         # Load Extensions
         for cog in [file.split('.')[0] for file in os.listdir('main/cogs') if file.endswith('.py')]:
