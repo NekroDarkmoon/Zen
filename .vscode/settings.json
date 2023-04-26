@@ -14,5 +14,6 @@
 		"--ignore C0116"
 	],
 	"cSpell.words": ["aiohttp", "alru", "asyncpg", "unban", "uvloop"],
-	"python.linting.enabled": true
+	"python.linting.enabled": true,
+	"python.analysis.typeCheckingMode": "basic"
 }

@@ -10,6 +10,7 @@ import datetime
 import logging
 import inspect
 import itertools
+import os
 
 from collections import Counter
 from typing import TYPE_CHECKING, Any, Optional, Union
@@ -316,6 +317,12 @@ class Meta(commands.Cog):
         bot.help_command = PaginatedHelpCommand()
         bot.help_command.cog = self
 
+    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    #                 Cog Functions
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{WHITE QUESTION MARK ORNAMENT}')
+
     def cog_unload(self) -> None:
         self.bot.help_command = self.old_help_command
 
@@ -323,17 +330,61 @@ class Meta(commands.Cog):
         if isinstance(error, commands.BadArgument):
             await ctx.send(str(error))
 
-    @commands.command()
+    @commands.hybrid_command()
     async def ping(self, ctx: Context) -> None:
         """Ping commands are stupid."""
         await ctx.send("Ping commands are stupid.")
+
+    @commands.hybrid_command()
+    async def source(self, ctx: Context, *, command: str = "") -> None:
+        """Displays my full source code or for a specific command.
+
+        To display the source code of a subcommand you can separate it by
+        periods, e.g. tag.create for the create subcommand of the tag command
+        or by spaces.
+        """
+        source_url = 'https://github.com/NekroDarkmoon/Zen'
+        branch = 'main'
+        if len(command) == 0:
+            return await ctx.send(source_url)  # type: ignore
+
+        if command == 'help':
+            src = type(self.bot.help_command)
+            module = src.__module__
+            filename = inspect.getsourcefile(src)
+        else:
+            obj = self.bot.get_command(command.replace('.', ' '))
+            if obj is None:
+                await ctx.send('Could not find command.')
+                return
+
+            # since we found the command we're looking for, presumably anyway, let's
+            # try to access the code itself
+            src = obj.callback.__code__
+            module = obj.callback.__module__
+            filename = src.co_filename
+
+        lines, first_line_no = inspect.getsourcelines(src)
+        if not module.startswith('discord'):
+            # not a built-in command
+            if filename is None:
+                await ctx.send('Could not find source for command.')
+                return
+
+            location = os.path.relpath(filename).replace('\\', '/')
+        else:
+            location = module.replace('.', '/') + '.py'
+            source_url = 'https://github.com/Rapptz/discord.py'
+            branch = 'master'
+
+        final_url = f'<{source_url}/blob/{branch}/{location}#L{first_line_no}-L{first_line_no + len(lines) - 1}>'
+        await ctx.send(final_url)
 
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     #                 Info Commands
     @commands.hybrid_group(invoke_without_command=True)
     async def info(self, ctx: Context) -> None:
         """ Display information related to the target. """
-
         if ctx.invoked_subcommand is None:
             await ctx.send_help('info')
 
@@ -374,9 +425,47 @@ class Meta(commands.Cog):
         e.set_author(name=str(user))
         e.add_field(name='ID', value=user.id, inline=False)
         e.add_field(name='Joined', value=format_date(
-            getattr(user, 'joined_at', None)), inline=False)
+            getattr(user, 'joined_at', None)), inline=False)  # type: ignore
         e.add_field(name='Created', value=format_date(
             user.created_at), inline=False)
+
+        badges_to_emoji = {
+            'partner': '<:partnernew:754032603081998336>',  # Discord Bots
+            'verified_bot_developer': '<:verifiedbotdev:853277205264859156>',  # Discord Bots
+            'hypesquad_balance': '<:balance:585763004574859273>',  # Discord Bots
+            'hypesquad_bravery': '<:bravery:585763004218343426>',  # Discord Bots
+            'hypesquad_brilliance': '<:brilliance:585763004495298575>',  # Discord Bots
+            'bug_hunter': '<:bughunter:585765206769139723>',  # Discord Bots
+            'hypesquad': '<:hypesquad_events:585765895939424258>',  # Discord Bots
+            'early_supporter': ' <:supporter:585763690868113455> ',  # Discord Bots
+            'bug_hunter_level_2': '<:goldbughunter:853274684337946648>',  # Discord Bots
+            'staff': '<:staff_badge:1087023029105725481>',  # R. Danny
+            'discord_certified_moderator': '<:certified_mod_badge:1087023030431129641>',  # R. Danny
+            'active_developer': '<:active_developer:1087023031332900894>',  # R. Danny
+        }
+
+        misc_flags_descriptions = {
+            'team_user': 'Application Team User',
+            'system': 'System User',
+            'spammer': 'Spammer',
+            'verified_bot': 'Verified Bot',
+            'bot_http_interactions': 'HTTP Interactions Bot',
+        }
+
+        set_flags = {flag for flag, value in user.public_flags if value}
+        subset_flags = set_flags & badges_to_emoji.keys()
+        badges = [badges_to_emoji[flag] for flag in subset_flags]
+
+        if ctx.guild is not None and ctx.guild.owner_id == user.id:
+            badges.append('<:owner:585789630800986114>')  # Discord Bots
+
+        if isinstance(user, discord.Member) and user.premium_since is not None:
+            e.add_field(name='Boosted', value=format_date(
+                user.premium_since), inline=False)
+            badges.append('<:booster:1087022965775925288>')  # R. Danny
+
+        if badges:
+            e.description = ''.join(badges)
 
         voice = getattr(user, 'voice', None)
         if voice is not None:
@@ -389,9 +478,19 @@ class Meta(commands.Cog):
             e.add_field(name='Roles', value=', '.join(roles) if len(
                 roles) < 10 else f'{len(roles)} roles', inline=False)
 
-        colour = user.colour
-        if colour.value:
-            e.colour = colour
+        remaining_flags = (
+            set_flags - subset_flags) & misc_flags_descriptions.keys()
+        if remaining_flags:
+            e.add_field(
+                name='Public Flags',
+                value='\n'.join(
+                    misc_flags_descriptions[flag] for flag in remaining_flags),
+                inline=False,
+            )
+
+        color = user.color
+        if color.value:
+            e.color = color
 
         sql = '''SELECT channel_id, last_msg FROM logger
                  WHERE server_id=$1 AND user_id=$2
@@ -405,8 +504,8 @@ class Meta(commands.Cog):
             val += f' in {ctx.guild.get_channel(record["channel_id"]).mention}'
             e.add_field(name='Last Message', value=val, inline=False)
 
-        if user.display_avatar:
-            e.set_thumbnail(url=user.display_avatar)
+        if user.display_avatar.url:
+            e.set_thumbnail(url=user.display_avatar.url)
 
         if isinstance(user, discord.User):
             e.set_footer(text='This member is not in this server.')
@@ -424,7 +523,8 @@ class Meta(commands.Cog):
         if idx is not None and await self.bot.is_owner(ctx.author):
             guild = self.bot.get_guild(idx)
             if guild is None:
-                return await ctx.send(f'Invalid Guild ID given.')
+                await ctx.send(f'Invalid Guild ID given.')
+                return
 
         else:
             guild = ctx.guild
