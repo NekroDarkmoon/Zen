@@ -20,14 +20,14 @@ if TYPE_CHECKING:
     from asyncpg import Pool
     from main.Zen import Zen
     from utils.context import Context
-    from main.cogs.logging import Logging
+    from main.cogs.loggingCog import LoggingCog
     from main.cogs.xp import XP
     from main.cogs.rep import Rep
     from main.cogs.game import Game
 
 
 log = logging.getLogger(__name__)
-GuildWritableChannels = discord.TextChannel | discord.CategoryChannel | discord.ForumChannel | discord.Thread
+GuildWritableChannels = discord.TextChannel | discord.CategoryChannel | discord.ForumChannel | discord.Thread  # type: ignore
 
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -43,6 +43,7 @@ GuildWritableChannels = discord.TextChannel | discord.CategoryChannel | discord.
 #                  Create Settings Instance
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 async def create_settings_instance(pool: Pool, guild: discord.Guild) -> None:
+    """Create a settings instance for a guild."""
     try:
         sql = '''INSERT INTO settings(server_id, owner_id)
                                      VALUES($1, $2)
@@ -56,28 +57,25 @@ async def create_settings_instance(pool: Pool, guild: discord.Guild) -> None:
 #                         Settings
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class Settings(commands.Cog):
+    """Settings for the bot."""
+
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
 
     # --------------------------------------------------
     #               App Commands Settings
-    settings_group = app_commands.Group(
-        name='settings', description='Server settings for the bot')
+    settings_group = app_commands.Group(name='settings', description='Server settings for the bot')
 
     @commands.group()
     async def settings(self, ctx: Context) -> None:
+        """Settings Group for the settings command"""
         if not ctx.invoked_subcommand:
             return await ctx.send_help(self)
 
     # __________________ Logging Channel  _____________________
     @settings_group.command(name='loggingchannel')
     @app_commands.describe(channel='Selected Channel', value='On or Off')
-    async def loggingchannel(
-        self,
-        interaction: discord.Interaction,
-        channel: discord.TextChannel,
-        value: bool
-    ) -> None:
+    async def loggingchannel(self, interaction: discord.Interaction, channel: discord.TextChannel, value: bool) -> None:
         """
         Set the logging channel for this server.
         """
@@ -101,7 +99,7 @@ class Settings(commands.Cog):
             log.error('Database query error.', exc_info=True)
 
         # Update Cache
-        cog: Optional[Logging] = self.bot.get_cog('Logging')
+        cog: Optional[LoggingCog] = self.bot.get_cog('LoggingCog')  # type: ignore
         if cog is not None:
             cog._get_logging_channel.cache_clear()
         else:
@@ -138,7 +136,7 @@ class Settings(commands.Cog):
             return
 
         # Update Cache
-        cog: Optional[XP] = self.bot.get_cog('XP')
+        cog: Optional[XP] = self.bot.get_cog('XP')  # type: ignore
         if cog is not None:
             cog._get_xp_enabled.cache_clear()
         else:
@@ -176,7 +174,7 @@ class Settings(commands.Cog):
             return
 
         # Update Cache
-        cog: Optional[Rep] = self.bot.get_cog('Rep')
+        cog: Optional[Rep] = self.bot.get_cog('Rep')  # type: ignore
         if cog is not None:
             cog._get_rep_enabled.cache_clear()
         else:
@@ -198,18 +196,16 @@ class Settings(commands.Cog):
         self,
         ctx: Context,
         action: Literal['add', 'remove', 'list'],
-        channels: commands.Greedy[
-            discord.TextChannel | discord.CategoryChannel | discord.ForumChannel
-        ]
+        channels: commands.Greedy[discord.TextChannel | discord.CategoryChannel | discord.ForumChannel],
     ) -> None:
-        """ Disable rep in certain channels
+        """Disable rep in certain channels
 
         Usage: `exclude_rep <add | remove | list> ["channel..."]`
         """
         # Data builder
         conn = self.bot.pool
         guild = ctx.guild
-        channels = set([c.id for c in channels])
+        channel_ids = {c.id for c in channels}
 
         # Check if exists
         await self._check_existence(guild)
@@ -225,17 +221,17 @@ class Settings(commands.Cog):
             existing_channels = set(res['excluded_rep_channels'])
 
             if action == 'add':
-                channels = channels.union(existing_channels)
+                channel_ids = channel_ids.union(existing_channels)
 
             elif action == 'remove':
-                channels = existing_channels.difference(channels)
+                channel_ids = existing_channels.difference(channel_ids)
 
             elif action == 'list':
-                mentions = [self.bot.get_channel(
-                    c).mention for c in existing_channels]
+                mentions = [self.bot.get_channel(c).mention for c in existing_channels]
 
                 msg = f"Rep can't be gained in the following channels: {', '.join( mentions)}"
-                return await ctx.reply(content=msg)
+                await ctx.reply(content=msg)
+                return
 
             else:
                 return
@@ -243,30 +239,27 @@ class Settings(commands.Cog):
             sql = '''UPDATE settings 
                      SET excluded_rep_channels=$2
                      WHERE server_id=$1'''
-            await conn.execute(sql, guild.id, list(channels))
+            await conn.execute(sql, guild.id, list(channel_ids))
 
         except Exception:
             log.error('Error while excluding channels.', exc_info=True)
 
         # Update Cache
-        cog: Optional[Rep] = self.bot.get_cog('Rep')
+        cog: Optional[Rep] = self.bot.get_cog('Rep')  # type: ignore
         if cog is not None:
             cog._get_excluded_channels.cache_clear()
         else:
             log.error(f'Cog not found - {cog}.', exc_info=True)
             return
 
-        return await ctx.reply('Updated Excluded Channels.')
+        await ctx.reply('Updated Excluded Channels.')
+        return
 
     # ________________ Enable Game System  ___________________
     @settings_group.command(name='enablegame')
     @app_commands.describe(choice='On or Off')
     async def enable_game(
-        self,
-        interaction: discord.Interaction,
-        choice: bool,
-        category: discord.CategoryChannel,
-        max_channels: Optional[int]
+        self, interaction: discord.Interaction, choice: bool, category: discord.CategoryChannel, max_channels: Optional[int]
     ) -> None:
         """Enable the game system for this guild."""
         # Defer
@@ -309,9 +302,7 @@ class Settings(commands.Cog):
         await interaction.edit_original_response(content=msg)
 
     role_rewards_group = app_commands.Group(
-        name='rewards',
-        description='Set up role rewards for different systems.',
-        parent=settings_group
+        name='rewards', description='Set up role rewards for different systems.', parent=settings_group
     )
 
     # ____________________ Create Reward  _____________________
@@ -319,13 +310,10 @@ class Settings(commands.Cog):
     @app_commands.describe(
         system='Select the system for which the reward is awarded.',
         role='Selected role for reward.',
-        value='Value for when reward is awarded.')
+        value='Value for when reward is awarded.',
+    )
     async def set_role_rewards(
-        self,
-        interaction: discord.Interaction,
-        system: Literal['Rep', 'XP'],
-        role: discord.Role,
-        value: int
+        self, interaction: discord.Interaction, system: Literal['Rep', 'XP'], role: discord.Role, value: int
     ) -> None:
         """Set a role as a reward."""
         # Defer
@@ -354,16 +342,9 @@ class Settings(commands.Cog):
 
     # ____________________ Remove Reward  _____________________
     @role_rewards_group.command(name='remove')
-    @app_commands.describe(
-        system='Select the system for the reward.',
-        role='Selected role ro remove.')
-    async def remove_role_rewards(
-        self,
-        interaction: discord.Interaction,
-        system: Literal['Rep', 'XP'],
-        role: discord.Role
-    ):
-        """"Remove a role as a reward."""
+    @app_commands.describe(system='Select the system for the reward.', role='Selected role ro remove.')
+    async def remove_role_rewards(self, interaction: discord.Interaction, system: Literal['Rep', 'XP'], role: discord.Role):
+        """ "Remove a role as a reward."""
         # Defer
         await interaction.response.defer()
 
@@ -389,7 +370,10 @@ class Settings(commands.Cog):
             log.error('Error while setting role reward.', exc_info=True)
 
     # ________________ Check Guild Data  ___________________
-    async def _check_existence(self, guild: discord.Guild) -> None:
+    async def _check_existence(self, guild: discord.Guild | None) -> None:
+        if not guild:
+            return
+
         # Check if exists
         conn = self.bot.pool
         try:
@@ -399,7 +383,7 @@ class Settings(commands.Cog):
             if res is None:
                 await create_settings_instance(conn, guild)
 
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             log.error('Database query error.', exc_info=True)
 
 
@@ -407,4 +391,5 @@ class Settings(commands.Cog):
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 async def setup(bot: Zen):
+    """Load the Settings cog."""
     await bot.add_cog(Settings(bot))

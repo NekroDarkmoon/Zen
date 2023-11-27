@@ -2,25 +2,22 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-import asyncio
-import json
-import aiohttp
-import asyncpg
-import click
 import contextlib
-import discord
 import logging
 import sys
 
 from logging.handlers import RotatingFileHandler
 
-import main.settings.config as config
+import asyncio
+import click
+
+from main.settings import config
 from main.Zen import Zen
 from main.cogs.utils.db import DB
 
 # Try Import
 try:
-    import uvloop
+    import uvloop  # type: ignore
 except ImportError:
     pass
 else:
@@ -43,7 +40,8 @@ def main(ctx):
 #                      Setup Logging
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-class RemoveNoise(logging.Filter):
+
+class RemoveNoise(logging.Filter):  # pylint: disable=too-few-public-methods
     """Filter for logger"""
 
     def __init__(self):
@@ -58,6 +56,9 @@ class RemoveNoise(logging.Filter):
 @contextlib.contextmanager
 def setup_logger():
     """Setup Logger as a Context Manager"""
+
+    logger: logging.Logger = logging.getLogger()
+
     try:
         # __enter__
         max_bytes: int = 64 * 1024 * 1024
@@ -65,14 +66,15 @@ def setup_logger():
         logging.getLogger('discord.http').setLevel(logging.WARNING)
         logging.getLogger('discord.state').addFilter(RemoveNoise())
 
-        logger: logging.Logger = logging.getLogger()
         logger.setLevel(logging.INFO)
         handler: RotatingFileHandler = RotatingFileHandler(
-            filename='.logs/Zen.log', encoding='utf_8', mode='w', maxBytes=max_bytes, backupCount=10)
+            filename='.logs/Zen.log', encoding='utf_8', mode='w', maxBytes=max_bytes, backupCount=10
+        )
         date_format = '%Y-%m-%d %H:%M:%S'
-        format: logging.Formatter = logging.Formatter(
-            '[{asctime}] [{levelname:<7}] {name}: {message}', date_format, style='{')
-        handler.setFormatter(format)
+        formatter: logging.Formatter = logging.Formatter(
+            '[{asctime}] [{levelname:<7}] {name}: {message}', date_format, style='{'
+        )
+        handler.setFormatter(formatter)
         logger.addHandler(handler)
 
         yield
@@ -80,7 +82,7 @@ def setup_logger():
     finally:
         # __exit__
         handlers = logger.handlers[:]
-        for handler in handlers:
+        for handler in handlers:  # type: ignore
             handler.close()
             logger.removeHandler(handler)
 
@@ -89,13 +91,13 @@ def setup_logger():
 #                         Run Bot
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 async def run_bot():
-    """ Starts the process of running the bot"""
+    """Starts the process of running the bot"""
     log = logging.getLogger()
 
     # Create DB Connection
     try:
         pool = await DB.create_pool(config.uri)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(e)
         click.echo("Unable to setup/start Postgres. Exiting. ", file=sys.stderr)
         log.exception('Unable to setup/start Postgres. Exiting.')
@@ -122,4 +124,4 @@ async def run_bot():
 #                          Init
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 if __name__ == '__main__':
-    main()
+    main()  # pylint: disable=no-value-for-parameter

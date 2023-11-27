@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Logging
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-class Logging(commands.Cog):
+class LoggingCog(commands.Cog):
     def __init__(self, bot: Zen) -> None:
         self.bot: Zen = bot
 
@@ -99,15 +99,11 @@ class Logging(commands.Cog):
             attachments = [x.proxy_url for x in attachments]
 
         try:
-            contentArray = [content[i:i+1000]
-                            for i in range(0, len(content), 1000)]
+            contentArray = [content[i : i + 1000] for i in range(0, len(content), 1000)]
 
-            e = discord.Embed(title='Deleted Message Log',
-                              colour=discord.Colour.red())
-            e.add_field(name='Author',
-                        value=text_color(f'{author.name} - {author.id}', 'red'), inline=False)
-            e.add_field(name='Channel',
-                        value=text_color(original_channel.name, 'red'), inline=False)
+            e = discord.Embed(title='Deleted Message Log', colour=discord.Colour.red())
+            e.add_field(name='Author', value=text_color(f'{author.name} - {author.id}', 'red'), inline=False)
+            e.add_field(name='Channel', value=text_color(original_channel.name, 'red'), inline=False)
 
             if attachments != []:
                 e.add_field(name='Attachments', value='\n'.join(attachments))
@@ -154,13 +150,10 @@ class Logging(commands.Cog):
             post_attachments = [x.proxy_url for x in post_attachments]
 
         try:
-            o_content_array = [old_content[i:i+1000]
-                               for i in range(0, len(old_content), 1000)]
-            n_content_array = [new_content[i:i+1000]
-                               for i in range(0, len(new_content), 1000)]
+            o_content_array = [old_content[i : i + 1000] for i in range(0, len(old_content), 1000)]
+            n_content_array = [new_content[i : i + 1000] for i in range(0, len(new_content), 1000)]
 
-            out_content = list(zip_longest(
-                o_content_array, n_content_array, fillvalue='...'))
+            out_content = list(zip_longest(o_content_array, n_content_array, fillvalue='...'))
 
             embeds = list()
             auth = text_color(f'{author.name} - {author.id}', 'orange')
@@ -205,8 +198,7 @@ class Logging(commands.Cog):
         log_channel = self.bot.get_channel(channel_id)
 
         e = discord.Embed(title=f'{before.name}', colour=discord.Colour.blue())
-        e.add_field(name='UserID', value=text_color(
-            before.id, 'blue'), inline=False)
+        e.add_field(name='UserID', value=text_color(before.id, 'blue'), inline=False)
         e.add_field(name='Old Nickname', value=old_nick)
         e.add_field(name='Old Nickname', value=new_nick)
         e.timestamp = datetime.utcnow()
@@ -227,8 +219,7 @@ class Logging(commands.Cog):
 
         log_channel = self.bot.get_channel(channel_id)
 
-        e = discord.Embed(
-            title=f'{member.name}#{member.discriminator}', color=discord.Color.red())
+        e = discord.Embed(title=f'{member.name}#{member.discriminator}', color=discord.Color.red())
         e.description = f':outbox_tray: {member.mention} **has left the guild.**'
         if member.display_avatar:
             e.set_thumbnail(url=member.display_avatar)
@@ -240,9 +231,7 @@ class Logging(commands.Cog):
     # --------------------------------------------------
     #                     Ban Logging
     @commands.Cog.listener(name='on_member_ban')
-    async def on_member_ban(
-        self, guild: discord.Guild, user: discord.User | discord.Member
-    ) -> None:
+    async def on_member_ban(self, guild: discord.Guild, user: discord.User | discord.Member) -> None:
         # Validation
         channel_id = await self._get_logging_channel(guild.id)
         if channel_id is None:
@@ -250,8 +239,7 @@ class Logging(commands.Cog):
 
         log_channel = self.bot.get_channel(channel_id)
 
-        e = discord.Embed(
-            title=f'{user.name}#{user.discriminator}', color=discord.Color.red())
+        e = discord.Embed(title=f'{user.name}#{user.discriminator}', color=discord.Color.red())
         e.description = f':outbox_tray: {user.mention} **has left the guild.**'
         e.set_thumbnail(url=user.avatar.url)
         e.set_footer(text=f'ID: {user.id}')
@@ -262,9 +250,7 @@ class Logging(commands.Cog):
     # --------------------------------------------------
     #                  Unban Logging
     @commands.Cog.listener(name='on_member_unban')
-    async def on_member_unban(
-        self, guild: discord.Guild, user: discord.User | discord.Member
-    ) -> None:
+    async def on_member_unban(self, guild: discord.Guild, user: discord.User | discord.Member) -> None:
         # Validation
         channel_id = await self._get_logging_channel(guild.id)
         if channel_id is None:
@@ -272,8 +258,7 @@ class Logging(commands.Cog):
 
         log_channel = self.bot.get_channel(channel_id)
 
-        e = discord.Embed(
-            title=f'{user.name}#{user.discriminator}', color=discord.Color.red())
+        e = discord.Embed(title=f'{user.name}#{user.discriminator}', color=discord.Color.red())
         e.description = f':outbox_tray: {user.mention} **has left the guild.**'
         e.set_thumbnail(url=user.avatar.url)
         e.set_footer(text=f'ID: {user.id}')
@@ -309,4 +294,4 @@ class Logging(commands.Cog):
 #                         Setup
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 async def setup(bot: Zen):
-    await bot.add_cog(Logging(bot))
+    await bot.add_cog(LoggingCog(bot))

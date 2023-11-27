@@ -7,7 +7,6 @@ from __future__ import annotations
 from unicodedata import name
 
 # Standard library imports
-import aiohttp
 import datetime
 import logging
 import os
@@ -19,6 +18,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Coroutine, Itera
 import asyncpg
 
 # Third party imports
+import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -100,15 +100,12 @@ class Zen(commands.AutoShardedBot):
     command_types_used: Counter[bool]
     logging_handler: Any
     bot_app_info: discord.AppInfo
-    old_tree_error = Callable[[
-        discord.Interaction, discord.app_commands.AppCommandError], Coroutine[Any, Any, None]]
+    old_tree_error = Callable[[discord.Interaction, discord.app_commands.AppCommandError], Coroutine[Any, Any, None]]
     session: aiohttp.ClientSession
     gateway_handler: Any
 
     def __init__(self) -> None:
-        allowed_mentions = discord.AllowedMentions(
-            roles=True, everyone=False, users=True
-        )
+        allowed_mentions = discord.AllowedMentions(roles=True, everyone=False, users=True)
         intents = discord.Intents.all()
         super().__init__(
             command_prefix=config.prefix,
@@ -125,13 +122,10 @@ class Zen(commands.AutoShardedBot):
 
         self.client_id: str = config.client_id
         self.dev_guilds: set = set(config.guilds)
-        self.resumes: defaultdict[int,
-                                  list[datetime.datetime]] = defaultdict(list)
-        self.identifies: defaultdict[int,
-                                     list[datetime.datetime]] = defaultdict(list)
+        self.resumes: defaultdict[int, list[datetime.datetime]] = defaultdict(list)
+        self.identifies: defaultdict[int, list[datetime.datetime]] = defaultdict(list)
 
-        self.spam_control = commands.CooldownMapping.from_cooldown(
-            10, 12.0, commands.BucketType.user)
+        self.spam_control = commands.CooldownMapping.from_cooldown(10, 12.0, commands.BucketType.user)
 
         self._auto_spam_count = Counter()
         self.command_stats = Counter()
@@ -139,13 +133,9 @@ class Zen(commands.AutoShardedBot):
 
     async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
-        self.prefixes: Config[list[str]] = Config(
-            'main/settings/prefixes.json')
-        self.blacklist: Config[bool] = Config(
-            'main/settings/blacklist.json')
-        self.google_sheet_config: Config[dict] = Config(
-            'main/settings/sheets.json'
-        )
+        self.prefixes: Config[list[str]] = Config('main/settings/prefixes.json')
+        self.blacklist: Config[bool] = Config('main/settings/blacklist.json')
+        self.google_sheet_config: Config[dict] = Config('main/settings/sheets.json')
 
         self.bot_app_info = await self.application_info()
         self.owner_id = self.bot_app_info.owner.id
@@ -163,8 +153,7 @@ class Zen(commands.AutoShardedBot):
                 traceback.print_exc()
 
         # Set Status
-        self.activity = discord.Activity(
-            name=config.activity, type=discord.ActivityType.watching)
+        self.activity = discord.Activity(name=config.activity, type=discord.ActivityType.watching)
 
     @property
     def owner(self) -> discord.User:
@@ -173,14 +162,12 @@ class Zen(commands.AutoShardedBot):
     def _clear_gateway_data(self) -> None:
         one_week_ago = discord.utils.utcnow() - datetime.timedelta(days=7)
         for shard_id, dates in self.identifies.items():
-            to_remove = [index for index, dt in enumerate(
-                dates) if dt < one_week_ago]
+            to_remove = [index for index, dt in enumerate(dates) if dt < one_week_ago]
             for index in reversed(to_remove):
                 del dates[index]
 
         for shard_id, dates in self.resumes.items():
-            to_remove = [index for index, dt in enumerate(
-                dates) if dt < one_week_ago]
+            to_remove = [index for index, dt in enumerate(dates) if dt < one_week_ago]
             for index in reversed(to_remove):
                 del dates[index]
 
@@ -199,8 +186,7 @@ class Zen(commands.AutoShardedBot):
             if not isinstance(original, discord.HTTPException):
                 print(f'In {ctx.command.qualified_name}:', file=sys.stderr)
                 traceback.print_tb(original.__traceback__)
-                print(f'{original.__class__.__name__}: {original}',
-                      file=sys.stderr)
+                print(f'{original.__class__.__name__}: {original}', file=sys.stderr)
         elif isinstance(error, commands.ArgumentParsingError):
             await ctx.send(str(error))
 
@@ -229,7 +215,7 @@ class Zen(commands.AutoShardedBot):
             pass
 
     async def query_member_named(
-            self, guild: discord.Guild, argument: str, *, cache: bool = False
+        self, guild: discord.Guild, argument: str, *, cache: bool = False
     ) -> Optional[discord.Member]:
         """Queries a member by their name, name + discrim, or nickname.
 
@@ -264,8 +250,7 @@ class Zen(commands.AutoShardedBot):
         if member is not None:
             return member
 
-        shard: discord.ShardInfo = self.get_shard(
-            guild.shard_id)  # type: ignore  # will never be None
+        shard: discord.ShardInfo = self.get_shard(guild.shard_id)  # type: ignore  # will never be None
         if shard.is_ws_ratelimited():
             try:
                 member = await guild.fetch_member(member_id)
@@ -303,8 +288,7 @@ class Zen(commands.AutoShardedBot):
 
         total_need_resolution = len(needs_resolution)
         if total_need_resolution == 1:
-            shard: discord.ShardInfo = self.get_shard(
-                guild.shard_id)  # type: ignore  # will never be None
+            shard: discord.ShardInfo = self.get_shard(guild.shard_id)  # type: ignore  # will never be None
             if shard.is_ws_ratelimited():
                 try:
                     member = await guild.fetch_member(needs_resolution[0])
@@ -324,7 +308,7 @@ class Zen(commands.AutoShardedBot):
         else:
             # We need to chunk these in bits of 100...
             for index in range(0, total_need_resolution, 100):
-                to_resolve = needs_resolution[index: index + 100]
+                to_resolve = needs_resolution[index : index + 100]
                 members = await guild.query_members(limit=100, user_ids=to_resolve, cache=True)
                 for member in members:
                     yield member
@@ -343,8 +327,7 @@ class Zen(commands.AutoShardedBot):
     @discord.utils.cached_property
     def stats_webhook(self) -> discord.Webhook:
         wh_id, wh_token = self.config.stat_webhook
-        hook = discord.Webhook.partial(
-            id=wh_id, token=wh_token, session=self.session)
+        hook = discord.Webhook.partial(id=wh_id, token=wh_token, session=self.session)
         return hook
 
     async def log_spammer(
@@ -354,19 +337,15 @@ class Zen(commands.AutoShardedBot):
         guild_id = getattr(ctx.guild, 'id', None)
 
         fmt = 'User %s (ID %s) in guild %r (ID %s) spamming, retry_after: %.2fs'
-        log.warning(fmt, message.author, message.author.id,
-                    guild_name, guild_id, retry_after)
+        log.warning(fmt, message.author, message.author.id, guild_name, guild_id, retry_after)
         if not autoblock:
             return
 
         wh = self.stats_webhook
         embed = discord.Embed(title='Auto-blocked Member', colour=0xDDA453)
-        embed.add_field(
-            name='Member', value=f'{message.author} (ID: {message.author.id})', inline=False)
-        embed.add_field(name='Guild Info',
-                        value=f'{guild_name} (ID: {guild_id})', inline=False)
-        embed.add_field(
-            name='Channel Info', value=f'{message.channel} (ID: {message.channel.id}', inline=False)
+        embed.add_field(name='Member', value=f'{message.author} (ID: {message.author.id})', inline=False)
+        embed.add_field(name='Guild Info', value=f'{guild_name} (ID: {guild_id})', inline=False)
+        embed.add_field(name='Channel Info', value=f'{message.channel} (ID: {message.channel.id}', inline=False)
         embed.timestamp = discord.utils.utcnow()
         return await wh.send(embed=embed)
 
