@@ -7,31 +7,29 @@ from __future__ import annotations
 
 # Standard library imports
 import datetime
-import logging
 import inspect
 import itertools
+import logging
 import os
-
 from collections import Counter
 from typing import TYPE_CHECKING, Any, Optional, Union
+
 import asyncpg
 
 # Third party imports
 import discord
 from discord import app_commands
-from discord.ext import commands
-from discord.ext import menus
-
+from discord.ext import commands, menus
 
 # Local application imports
 from main.cogs.utils import formats, time
 from main.cogs.utils.context import Context, GuildContext
 from main.cogs.utils.paginator import TabularPages, ZenPages
 
-
 if TYPE_CHECKING:
-    from main.Zen import Zen
     from utils.context import Context
+
+    from main.Zen import Zen
 
 GuildChannel = discord.TextChannel | discord.VoiceChannel | discord.StageChannel | discord.CategoryChannel | discord.Thread
 
@@ -383,6 +381,10 @@ class Meta(commands.Cog):
     async def user_info(self, ctx: Context, *, user: discord.Member | discord.User = None) -> None:
         """Display Information about a user."""
         await ctx.typing()
+
+        if ctx.guild is None:
+            await ctx.send(content='This command is not available in DMs.')
+            return
 
         # Data builder
         user = user or ctx.author
