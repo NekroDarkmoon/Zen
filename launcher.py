@@ -2,18 +2,17 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Imports
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+import asyncio
 import contextlib
 import logging
 import sys
-
 from logging.handlers import RotatingFileHandler
 
-import asyncio
 import click
 
+from main.cogs.utils.db import DB
 from main.settings import config
 from main.Zen import Zen
-from main.cogs.utils.db import DB
 
 # Try Import
 try:

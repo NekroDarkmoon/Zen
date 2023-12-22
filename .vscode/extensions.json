@@ -1,6 +1,9 @@
 {
   "recommendations": [
     "magicstack.magicpython",
-    "njpwerner.autodocstring"
+    "njpwerner.autodocstring",
+    "ms-python.black-formatter",
+    "streetsidesoftware.code-spell-checker",
+    "ms-python.isort"
   ]
 }

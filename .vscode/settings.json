@@ -1,6 +1,11 @@
 {
 	"editor.tabSize": 4,
 	"editor.formatOnSave": true,
+	"editor.defaultFormatter": "ms-python.black-formatter",
+	"editor.codeActionsOnSave": {
+		"source.organizeImports": "explicit"
+	},
+
 	"cSpell.words": [
 		"aiohttp",
 		"alru",
@@ -9,5 +14,10 @@
 		"uvloop"
 	],
 	"python.analysis.typeCheckingMode": "basic",
-	"python.analysis.autoImportCompletions": true
+	"python.analysis.autoImportCompletions": true,
+
+	"isort.args": [
+		"--profile",
+		"black"
+	]
 }

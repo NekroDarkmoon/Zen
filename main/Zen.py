@@ -4,7 +4,6 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 from __future__ import annotations
-from unicodedata import name
 
 # Standard library imports
 import datetime
@@ -12,13 +11,12 @@ import logging
 import os
 import sys
 import traceback
-
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Coroutine, Iterable, Optional, Union
-import asyncpg
 
 # Third party imports
 import aiohttp
+import asyncpg
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -60,13 +58,13 @@ class ZenCommandTree(app_commands.CommandTree):
     ) -> None:
         assert interaction.command is not None
 
-        e = discord.Embed(title='Command Error', colour=0xA32952)
+        e = discord.Embed(title='Command Error', color=0xA32952)
         e.add_field(name='Command', value=interaction.command.name)
         (exc_type, exc, tb) = type(error), error, error.__traceback__
         trace = traceback.format_exception(exc_type, exc, tb)
         e.add_field(name="Error", value=f"```py\n{trace}\n```")
         e.timestamp = datetime.datetime.now(datetime.timezone.utc)
-        hook = self.client.get_cog("Stats").webhook
+        hook = self.client.get_cog("Stats").webhook  # type: ignore
         try:
             await hook.send(embed=e)
         except discord.HTTPException:

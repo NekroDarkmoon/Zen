@@ -42,41 +42,25 @@ log = logging.getLogger('__name__')
 #                  Group Help Page Source
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class GroupHelpPageSource(menus.ListPageSource):
-    def __init__(
-        self,
-        group: Union[commands.Group, commands.Cog],
-        entries: list[commands.Command],
-        *,
-        prefix: str
-    ) -> None:
+    def __init__(self, group: Union[commands.Group, commands.Cog], entries: list[commands.Command], *, prefix: str) -> None:
         super().__init__(entries=entries, per_page=6)
         self.group: Union[commands.Group, commands.Cog] = group
         self.prefix: str = prefix
         self.title: str = f'{self.group.qualified_name} Commands'
         self.description: str = self.group.description
 
-    async def format_page(
-        self, menu: ZenPages, commands: list[commands.Command]
-    ) -> discord.Embed:
-        embed = discord.Embed(
-            title=self.title,
-            description=self.description,
-            colour=discord.Colour.random()
-        )
+    async def format_page(self, menu: ZenPages, commands: list[commands.Command]) -> discord.Embed:
+        embed = discord.Embed(title=self.title, description=self.description, colour=discord.Colour.random())
 
         for command in commands:
             signature = f'{command.qualified_name} {command.signature}'
-            embed.add_field(
-                name=signature, value=command.short_doc or 'No help given...', inline=False)
+            embed.add_field(name=signature, value=command.short_doc or 'No help given...', inline=False)
 
         maximum = self.get_max_pages()
         if maximum > 1:
-            embed.set_author(
-                name=f'Page {menu.current_page + 1}/{maximum} ({len(self.entries)} commands)')
+            embed.set_author(name=f'Page {menu.current_page + 1}/{maximum} ({len(self.entries)} commands)')
 
-        embed.set_footer(
-            text=f'Use "{self.prefix}help command" for more info on a command.'
-        )
+        embed.set_footer(text=f'Use "{self.prefix}help command" for more info on a command.')
 
         return embed
 
@@ -108,8 +92,7 @@ class HelpSelectMenu(discord.ui.Select['HelpMenu']):
                 continue
             description = cog.description.split('\n', 1)[0] or None
             emoji = getattr(cog, 'display_emoji', None)
-            self.add_option(label=cog.qualified_name, value=cog.qualified_name,
-                            description=description, emoji=emoji)
+            self.add_option(label=cog.qualified_name, value=cog.qualified_name, description=description, emoji=emoji)
 
     async def callback(self, interaction: discord.Interaction):
         assert self.view is not None
@@ -127,8 +110,7 @@ class HelpSelectMenu(discord.ui.Select['HelpMenu']):
                 await interaction.response.send_message('This category has no commands for you', ephemeral=True)
                 return
 
-            source = GroupHelpPageSource(
-                cog, commands, prefix=self.view.ctx.clean_prefix)
+            source = GroupHelpPageSource(cog, commands, prefix=self.view.ctx.clean_prefix)
             await self.view.rebind(source, interaction)
 
 
@@ -151,8 +133,7 @@ class FrontPageSource(menus.PageSource):
         return self
 
     def format_page(self, menu: HelpMenu, page: Any) -> discord.Embed:
-        embed = discord.Embed(
-            title='Bot Help', colour=discord.Colour.random())
+        embed = discord.Embed(title='Bot Help', colour=discord.Colour.random())
         embed.description = inspect.cleandoc(
             f"""
             Hello! Welcome to the help page.
@@ -182,8 +163,7 @@ class FrontPageSource(menus.PageSource):
                 ),
             )
 
-            embed.add_field(name='How do I use this bot?',
-                            value='Reading the bot signature is pretty simple.')
+            embed.add_field(name='How do I use this bot?', value='Reading the bot signature is pretty simple.')
 
             for name, value in entries:
                 embed.add_field(name=name, value=value, inline=False)
@@ -264,8 +244,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
             cog = bot.get_cog(name)
             assert cog is not None
-            all_commands[cog] = sorted(
-                children, key=lambda c: c.qualified_name)
+            all_commands[cog] = sorted(children, key=lambda c: c.qualified_name)
 
         menu = HelpMenu(FrontPageSource(), ctx=self.context)
         menu.add_categories(all_commands)
@@ -273,8 +252,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
     async def send_cog_help(self, cog):
         entries = await self.filter_commands(cog.get_commands(), sort=True)
-        menu = HelpMenu(GroupHelpPageSource(
-            cog, entries, prefix=self.context.clean_prefix), ctx=self.context)
+        menu = HelpMenu(GroupHelpPageSource(cog, entries, prefix=self.context.clean_prefix), ctx=self.context)
         await menu.start()
 
     def common_command_formatting(self, embed_like, command):
@@ -299,8 +277,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
         if len(entries) == 0:
             return await self.send_command_help(group)
 
-        source = GroupHelpPageSource(
-            group, entries, prefix=self.context.clean_prefix)
+        source = GroupHelpPageSource(group, entries, prefix=self.context.clean_prefix)
         self.common_command_formatting(source, group)
         menu = HelpMenu(source, ctx=self.context)
 
@@ -384,15 +361,13 @@ class Meta(commands.Cog):
     #                 Info Commands
     @commands.hybrid_group(invoke_without_command=True)
     async def info(self, ctx: Context) -> None:
-        """ Display information related to the target. """
+        """Display information related to the target."""
         if ctx.invoked_subcommand is None:
             await ctx.send_help('info')
 
     @info.command('avatar')
     @app_commands.describe(user='Selected User')
-    async def user_avatar(
-        self, ctx: Context, user: discord.Member | discord.User
-    ) -> None:
+    async def user_avatar(self, ctx: Context, user: discord.Member | discord.User) -> None:
         """Shows a user's enlarged avatar (if possible)."""
         # Databuilder
         user = user or ctx.author
@@ -405,16 +380,13 @@ class Meta(commands.Cog):
 
     @info.command('user')
     @app_commands.describe(user='Selected User')
-    async def user_info(
-        self, ctx: Context, user: discord.Member | discord.User
-    ) -> None:
-        """ Display Information about a user. """
+    async def user_info(self, ctx: Context, *, user: discord.Member | discord.User = None) -> None:
+        """Display Information about a user."""
         await ctx.typing()
 
         # Data builder
         user = user or ctx.author
-        roles = [role.name.replace('@', '@\u200b')
-                 for role in getattr(user, 'roles', [])]
+        roles = [role.name.replace('@', '@\u200b') for role in getattr(user, 'roles', [])]
 
         def format_date(dt: datetime.datetime) -> str:
             if dt is None:
@@ -424,10 +396,8 @@ class Meta(commands.Cog):
         e = discord.Embed()
         e.set_author(name=str(user))
         e.add_field(name='ID', value=user.id, inline=False)
-        e.add_field(name='Joined', value=format_date(
-            getattr(user, 'joined_at', None)), inline=False)  # type: ignore
-        e.add_field(name='Created', value=format_date(
-            user.created_at), inline=False)
+        e.add_field(name='Joined', value=format_date(getattr(user, 'joined_at', None)), inline=False)  # type: ignore
+        e.add_field(name='Created', value=format_date(user.created_at), inline=False)
 
         badges_to_emoji = {
             'partner': '<:partnernew:754032603081998336>',  # Discord Bots
@@ -460,8 +430,7 @@ class Meta(commands.Cog):
             badges.append('<:owner:585789630800986114>')  # Discord Bots
 
         if isinstance(user, discord.Member) and user.premium_since is not None:
-            e.add_field(name='Boosted', value=format_date(
-                user.premium_since), inline=False)
+            e.add_field(name='Boosted', value=format_date(user.premium_since), inline=False)
             badges.append('<:booster:1087022965775925288>')  # R. Danny
 
         if badges:
@@ -475,16 +444,13 @@ class Meta(commands.Cog):
             e.add_field(name='Voice', value=voice, inline=False)
 
         if roles:
-            e.add_field(name='Roles', value=', '.join(roles) if len(
-                roles) < 10 else f'{len(roles)} roles', inline=False)
+            e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles', inline=False)
 
-        remaining_flags = (
-            set_flags - subset_flags) & misc_flags_descriptions.keys()
+        remaining_flags = (set_flags - subset_flags) & misc_flags_descriptions.keys()
         if remaining_flags:
             e.add_field(
                 name='Public Flags',
-                value='\n'.join(
-                    misc_flags_descriptions[flag] for flag in remaining_flags),
+                value='\n'.join(misc_flags_descriptions[flag] for flag in remaining_flags),
                 inline=False,
             )
 
@@ -495,9 +461,7 @@ class Meta(commands.Cog):
         sql = '''SELECT channel_id, last_msg FROM logger
                  WHERE server_id=$1 AND user_id=$2
               '''
-        record: asyncpg.Record = await self.bot.pool.fetchrow(
-            sql, ctx.guild.id, user.id
-        )
+        record: asyncpg.Record = await self.bot.pool.fetchrow(sql, ctx.guild.id, user.id)
 
         if record is not None:
             val = f'{time.format_relative(record["last_msg"])}'
@@ -514,10 +478,8 @@ class Meta(commands.Cog):
 
     @info.command('server')
     @app_commands.describe(idx='Guild ID')
-    async def server_info(
-        self, ctx: GuildContext, idx: Optional[int] = None
-    ) -> None:
-        """ Shows information about the server."""
+    async def server_info(self, ctx: GuildContext, idx: Optional[int] = None) -> None:
+        """Shows information about the server."""
         await ctx.typing()
 
         if idx is not None and await self.bot.is_owner(ctx.author):
@@ -541,8 +503,7 @@ class Meta(commands.Cog):
         totals = Counter()
         for channel in guild.channels:
             allow, deny = channel.overwrites_for(everyone).pair()
-            perms = discord.Permissions(
-                (everyone_perms & ~deny.value) | allow.value)
+            perms = discord.Permissions((everyone_perms & ~deny.value) | allow.value)
             channel_type = type(channel)
             totals[channel_type] += 1
             if not perms.read_messages:
@@ -610,8 +571,7 @@ class Meta(commands.Cog):
 
         if guild.premium_tier != 0:
             boosts = f'Level {guild.premium_tier}\n{guild.premium_subscription_count} boosts'
-            last_boost = max(
-                guild.members, key=lambda m: m.premium_since or guild.created_at)
+            last_boost = max(guild.members, key=lambda m: m.premium_since or guild.created_at)
             if last_boost.premium_since is not None:
                 boosts = f'{boosts}\nLast Boost: {last_boost} ({time.format_relative(last_boost.premium_since)})'
             e.add_field(name='Boosts', value=boosts, inline=False)
@@ -620,8 +580,7 @@ class Meta(commands.Cog):
         fmt = f'Total: {guild.member_count} ({formats.Plural(bots):bot})'
 
         e.add_field(name='Members', value=fmt, inline=False)
-        e.add_field(name='Roles', value=', '.join(roles)
-                    if len(roles) < 10 else f'{len(roles)} roles')
+        e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles')
 
         emoji_stats = Counter()
         for emoji in guild.emojis:
@@ -645,28 +604,17 @@ class Meta(commands.Cog):
         await ctx.send(embed=e)
 
     @info.command('self')
-    async def self_info(
-        self, ctx: Context
-    ) -> None:
+    async def self_info(self, ctx: Context) -> None:
         e = discord.Embed(
-            title="Zen",
-            description="Hello, I'm a bot for ttrpg servers. I help with managing ttrgp communities."
+            title="Zen", description="Hello, I'm a bot for ttrpg servers. I help with managing ttrgp communities."
         )
 
-        e.add_field(
-            name="Bot ID", value=f"```{self.bot.user.id}```", inline=True
-        )
+        e.add_field(name="Bot ID", value=f"```{self.bot.user.id}```", inline=True)
 
-        e.add_field(
-            name="Guilds", value=f"```{len(self.bot.guilds)}```", inline=True
-        )
+        e.add_field(name="Guilds", value=f"```{len(self.bot.guilds)}```", inline=True)
 
-        total_members = sum(
-            [g.member_count for g in self.bot.guilds if g.member_count is not None]
-        )
-        e.add_field(
-            name="Members", value=f"```{total_members}```", inline=False
-        )
+        total_members = sum([g.member_count for g in self.bot.guilds if g.member_count is not None])
+        e.add_field(name="Members", value=f"```{total_members}```", inline=False)
 
         slash_commands = len(self.bot.tree.get_commands())
         all_commands = len(self.bot.commands)
@@ -677,14 +625,10 @@ class Meta(commands.Cog):
         elapsed_time = datetime.datetime.now() - self.bot.start_time
         uptime = f"{round(elapsed_time.seconds / 3600, 2)} hours" if elapsed_time.days == 0 else f"{elapsed_time.days} days"
 
-        e.add_field(
-            name="Uptime", value=f"```{uptime}```", inline=False
-        )
+        e.add_field(name="Uptime", value=f"```{uptime}```", inline=False)
 
         # repo link
-        e.add_field(
-            name="Repo Link", value="https://github.com/NekroDarkmoon/Zen", inline=False
-        )
+        e.add_field(name="Repo Link", value="https://github.com/NekroDarkmoon/Zen", inline=False)
 
         e.timestamp = datetime.datetime.now(tz=None)
         e.set_thumbnail(url=self.bot.user.avatar)
@@ -693,10 +637,8 @@ class Meta(commands.Cog):
 
     @info.command('role')
     @app_commands.describe(role='Selected Role')
-    async def role_info(
-        self, ctx: GuildContext, role: discord.Role
-    ) -> None:
-        """ Get information on a role."""
+    async def role_info(self, ctx: GuildContext, role: discord.Role) -> None:
+        """Get information on a role."""
         # Data builder
 
         idx = role.id
@@ -704,14 +646,11 @@ class Meta(commands.Cog):
         count = len(members)
         data = [{'Member': m.display_name} for m in members]
 
-        p = TabularPages(
-            entries=data, ctx=ctx, headers='keys'
-        )
+        p = TabularPages(entries=data, ctx=ctx, headers='keys')
 
         p.embed.title = f'{role.name} - {idx}'
         p.embed.colour = role.color
-        p.embed.add_field(name='Member Count',
-                          value=f'`{count}`', inline=False)
+        p.embed.add_field(name='Member Count', value=f'`{count}`', inline=False)
         p.embed.set_author(name=ctx.author.display_name)
         await p.start()
 
@@ -737,10 +676,7 @@ class Meta(commands.Cog):
     @info.command('permissions')
     @app_commands.describe(member='Selected Member', channel='Selected Channel')
     async def permissions(
-        self,
-        ctx: GuildContext,
-        member: Optional[discord.Member] = None,
-        channel: Optional[GuildChannel] = None
+        self, ctx: GuildContext, member: Optional[discord.Member] = None, channel: Optional[GuildChannel] = None
     ) -> None:
         """Shows a member's permissions in a specific channel.
 
@@ -757,9 +693,7 @@ class Meta(commands.Cog):
 
     @info.command()
     @commands.guild_only()
-    async def botpermissions(
-        self, ctx: GuildContext, *, channel: Optional[GuildChannel] = None
-    ):
+    async def botpermissions(self, ctx: GuildContext, *, channel: Optional[GuildChannel] = None):
         """Shows the bot's permissions in a specific channel.
 
         If no channel is given then it uses the current one.
@@ -773,9 +707,7 @@ class Meta(commands.Cog):
 
     @info.command()
     @commands.is_owner()
-    async def debugpermissions(
-            self, ctx: Context, guild_id: int, channel_id: int, author_id: int = None
-    ):
+    async def debugpermissions(self, ctx: Context, guild_id: int, channel_id: int, author_id: int = None):
         """Shows permission resolution for a channel and an optional author."""
 
         guild = self.bot.get_guild(guild_id)
@@ -806,12 +738,11 @@ class Meta(commands.Cog):
     @commands.hybrid_command(name='preview')
     @app_commands.describe(message='Message to preview')
     async def message_preview(self, ctx: GuildContext, message: discord.Message) -> None:
-        """ Generate a preview of a message. 
+        """Generate a preview of a message.
 
-            Can take links and ids.
+        Can take links and ids.
         """
-        e = discord.Embed(title='Message Preview',
-                          colour=discord.Colour.random())
+        e = discord.Embed(title='Message Preview', colour=discord.Colour.random())
         e.description = message.content
 
         for a in message.attachments:
@@ -822,9 +753,10 @@ class Meta(commands.Cog):
 
         e.url = message.to_reference().jump_url
         e.timestamp = datetime.datetime.utcnow()
-        e.set_author(name=message.author,
-                     icon_url=message.author.display_avatar)
+        e.set_author(name=message.author, icon_url=message.author.display_avatar)
         await ctx.send(embed=e)
+
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #                         Import
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
