@@ -13,7 +13,6 @@
 		"unban",
 		"uvloop"
 	],
-	"python.analysis.typeCheckingMode": "basic",
 	"python.analysis.autoImportCompletions": true,
 
 	"isort.args": [
